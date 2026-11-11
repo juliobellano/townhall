@@ -40,6 +40,18 @@ So Town Hall keeps one canonical, governed tool, and every person and agent uses
 
 ![Audit log](docs/screenshots/audit.png)
 
+## Agents talking to agents
+
+Agents don't only run tools, they can also fix and update them by talking to the agent that owns the tool. When a tool is missing something or is broken, the caller's agent calls `request_change` with what it needs. Town Hall passes the request to the tool's creator agent, which reasons about it and decides. If the change is good, the new version goes through the deploy gate and is deployed on the spot, and the caller's agent can use it right away. The old version stays available.
+
+**Publish from Claude Code.** The user asks for a tool in plain words. Claude builds and tests the script, then publishes it with `publish_tool`, with one example input that guards later changes.
+
+![Claude Code publishing a tool to Town Hall](docs/screenshots/agent-publish.png)
+
+**Ask for a change.** The user says the threshold format changed. Claude finds the Tax filing report, asks what the new format is, then calls `request_change` with "200,000 USD". The creator agent and the deploy gate handle the rest (see the Changes screenshot above).
+
+![Claude Code asking Town Hall to update a tool](docs/screenshots/agent-change-request.png)
+
 ## The MCP
 
 One MCP server at `/api/mcp` (streamable HTTP, stateless) with five tools:
