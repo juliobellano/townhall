@@ -12,7 +12,7 @@ async function handle(req: Request): Promise<Response> {
       { status: 401 },
     );
   }
-  const server = createTownMcpServer(identity);
+  const server = createTownMcpServer(identity, { origin: new URL(req.url).origin });
   // Stateless: a new transport per request, so nothing is lost on dev reloads.
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

@@ -24,6 +24,7 @@ const TOOL_CONTRACT = `A Town Hall tool is a Python 3 script (standard library o
 2. writes its JSON result to stdout,
 3. prints its own input JSON Schema (type "object", with "properties" and "required") when run with --schema,
 4. on failure prints {"error": "<message>"} to stdout and exits with a non-zero status.
+5. may return files (for example a PDF) in the reserved "_files" key of its result: [{"name": "report.pdf", "mime_type": "application/pdf", "base64": "..."}]. Town Hall stores them and returns download links instead of the bytes.
 Give new optional inputs a "default" in the schema.`;
 
 /**
@@ -31,7 +32,7 @@ Give new optional inputs a "default" in the schema.`;
  * generic: schemas are read through get_tool at call time, so a new version never needs
  * re-registering and a client's cached tool list cannot go stale.
  */
-export function createTownMcpServer(identity: Identity): McpServer {
+export function createTownMcpServer(identity: Identity, opts: { origin?: string } = {}): McpServer {
   const server = new McpServer({ name: "townhall", version: "0.1.0" });
 
   server.registerTool(
@@ -61,7 +62,7 @@ export function createTownMcpServer(identity: Identity): McpServer {
     "run_tool",
     {
       description:
-        "Run a tool and get its result. Inputs must match the tool's inputSchema exactly: unknown inputs are rejected, not ignored. The run is audited with your user and agent, including runs refused by access control (code 'forbidden'). Omit version to use the latest.",
+        "Run a tool and get its result. Inputs must match the tool's inputSchema exactly: unknown inputs are rejected, not ignored. The run is audited with your user and agent, including runs refused by access control (code 'forbidden'). Omit version to use the latest. If the tool returns files (for example a PDF), the result lists them under files, each with a download_url and a ready curl command that saves it.",
       inputSchema: {
         id: z.string().describe("Tool id"),
         inputs: z.record(z.string(), z.unknown()).describe("Inputs matching the tool's inputSchema"),
@@ -70,7 +71,19 @@ export function createTownMcpServer(identity: Identity): McpServer {
     },
     async ({ id, inputs, version }) => {
       const res = await runTool({ id, inputs, version }, identity);
-      return res.ok ? json(res) : json(res, true);
+      if (!res.ok) return json(res, true);
+      const origin = opts.origin ?? "http://localhost:3000";
+      const files = res.files.map((f) => {
+        const url = origin + f.url;
+        // Only offer a ready command when every part is shell-safe (names are validated; identities come from headers).
+        const safe = [identity.user, identity.agent, f.name, url].every((s) => /^[\w.:/%@ -]+$/.test(s));
+        const save = safe ? `curl -fsS -H 'X-Townhall-User: ${identity.user}' -H 'X-Townhall-Agent: ${identity.agent}' -o '${f.name}' '${url}'` : undefined;
+        return { name: f.name, mime_type: f.mimeType, bytes: f.bytes, download_url: url, save_with: save };
+      });
+      const body = json({ ...res, files });
+      // Also point at each file with a standard MCP resource link.
+      for (const f of files) body.content.push({ type: "resource_link", uri: f.download_url, name: f.name, mimeType: f.mime_type } as never);
+      return body;
     },
   );
 

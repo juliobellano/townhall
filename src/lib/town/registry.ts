@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { accessDenied, canAccess, DENIED_PREFIX, normalizeAccess } from "./access";
 import { getDb, now } from "./db";
-import { toolsDir } from "./paths";
+import { filesDir, toolsDir } from "./paths";
 import { readSchema, runScript } from "./runner";
 import { validateInputs, type JsonSchema } from "./schema";
-import type { Check, ErrorCode, Failure, Identity, RunRecord, ToolDetail, ToolSummary } from "./types";
+import type { Check, ErrorCode, Failure, Identity, RunFile, RunRecord, ToolDetail, ToolSummary } from "./types";
 
 const MAX_SOURCE_BYTES = 64 * 1024;
 
@@ -176,8 +176,64 @@ export function searchTools(query?: string): ToolSummary[] {
 }
 
 export type RunToolResult =
-  | { ok: true; toolId: string; version: number; output: unknown; durationMs: number }
+  | { ok: true; toolId: string; version: number; runId: number; output: unknown; files: RunFile[]; durationMs: number }
   | (Failure & { toolId?: string; version?: number });
+
+/** The reserved output key a tool uses to return files: [{name, mime_type, base64}]. */
+export const FILES_KEY = "_files";
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,99}$/;
+
+type ReturnedFile = { name: string; mimeType: string; data: Buffer };
+
+/**
+ * Lifts returned files out of a tool's output, so the stored output, the audit log and the agent's
+ * context carry only metadata and a link, never the file bytes.
+ */
+export function extractFiles(output: unknown): { ok: true; output: unknown; files: ReturnedFile[] } | { ok: false; error: string } {
+  if (!output || typeof output !== "object" || Array.isArray(output) || !(FILES_KEY in output)) return { ok: true, output, files: [] };
+  const { [FILES_KEY]: raw, ...rest } = output as Record<string, unknown>;
+  const bad = (why: string) => ({ ok: false as const, error: `Tool contract violation: "${FILES_KEY}" ${why}` });
+  if (!Array.isArray(raw)) return bad("must be a list of {name, mime_type, base64}");
+  if (raw.length > MAX_FILES) return bad(`may hold at most ${MAX_FILES} files`);
+  const files: ReturnedFile[] = [];
+  for (const f of raw as Record<string, unknown>[]) {
+    if (!f || typeof f !== "object") return bad("entries must be objects");
+    const name = f.name;
+    if (typeof name !== "string" || !FILE_NAME.test(name) || name.includes("..")) return bad(`has an invalid file name: ${JSON.stringify(name)}`);
+    if (files.some((x) => x.name === name)) return bad(`has two files named ${name}`);
+    if (typeof f.base64 !== "string") return bad(`file ${name} has no base64 content`);
+    const data = Buffer.from(f.base64, "base64");
+    if (data.length > MAX_FILE_BYTES) return bad(`file ${name} is larger than 10 MB`);
+    const mimeType = typeof f.mime_type === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(f.mime_type) ? f.mime_type : "application/octet-stream";
+    files.push({ name, mimeType, data });
+  }
+  return { ok: true, output: rest, files };
+}
+
+const fileUrl = (runId: number, name: string) => `/api/files/${runId}/${encodeURIComponent(name)}`;
+
+function storeFiles(runId: number, files: ReturnedFile[]): RunFile[] {
+  if (files.length === 0) return [];
+  const dir = path.join(filesDir(), String(runId));
+  fs.mkdirSync(dir, { recursive: true });
+  const meta = files.map((f) => {
+    fs.writeFileSync(path.join(dir, f.name), f.data, { mode: 0o600 });
+    return { name: f.name, mimeType: f.mimeType, bytes: f.data.length, url: fileUrl(runId, f.name) };
+  });
+  getDb().prepare("UPDATE runs SET files = ? WHERE id = ?").run(JSON.stringify(meta), runId);
+  return meta;
+}
+
+/** A stored file of a run, for the download route. The caller checks access. */
+export function getRunFile(runId: number, name: string): { toolId: string; file: RunFile; path: string } | null {
+  const row = getDb().prepare("SELECT tool_id, files FROM runs WHERE id = ?").get(runId) as { tool_id: string; files: string } | undefined;
+  if (!row) return null;
+  const file = (JSON.parse(row.files) as RunFile[]).find((f) => f.name === name);
+  // The name comes from the stored metadata (validated at store time), never from the URL.
+  return file ? { toolId: row.tool_id, file, path: path.join(filesDir(), String(runId), file.name) } : null;
+}
 
 function audit(
   identity: Identity,
@@ -188,10 +244,11 @@ function audit(
   output: unknown,
   error: string | null,
   durationMs: number,
-) {
-  getDb()
+): number {
+  const res = getDb()
     .prepare("INSERT INTO runs (tool_id, version, person, agent, inputs, ok, output, error, duration_ms, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
     .run(toolId, version, identity.user, identity.agent, JSON.stringify(inputs ?? null), ok ? 1 : 0, ok ? JSON.stringify(output) : null, error, durationMs, now());
+  return Number(res.lastInsertRowid);
 }
 
 export async function runTool(
@@ -219,8 +276,14 @@ export async function runTool(
     audit(identity, tool.id, version, args.inputs, false, null, res.error, res.durationMs);
     return { ...fail("tool_failed", res.error), toolId: tool.id, version };
   }
-  audit(identity, tool.id, version, args.inputs, true, res.output, null, res.durationMs);
-  return { ok: true, toolId: tool.id, version, output: res.output, durationMs: res.durationMs };
+  const extracted = extractFiles(res.output);
+  if (!extracted.ok) {
+    audit(identity, tool.id, version, args.inputs, false, null, extracted.error, res.durationMs);
+    return { ...fail("contract_violation", extracted.error), toolId: tool.id, version };
+  }
+  const runId = audit(identity, tool.id, version, args.inputs, true, extracted.output, null, res.durationMs);
+  const files = storeFiles(runId, extracted.files);
+  return { ok: true, toolId: tool.id, version, runId, output: extracted.output, files, durationMs: res.durationMs };
 }
 
 type RunRow = {
@@ -233,6 +296,7 @@ type RunRow = {
   ok: number;
   output: string | null;
   error: string | null;
+  files: string;
   duration_ms: number;
   created_at: string;
 };
@@ -252,6 +316,7 @@ export function listRuns(limit = 50, toolId?: string): RunRecord[] {
     ok: r.ok === 1,
     denied: r.ok !== 1 && (r.error ?? "").startsWith(DENIED_PREFIX),
     output: r.output ? JSON.parse(r.output) : null,
+    files: JSON.parse(r.files ?? "[]") as RunFile[],
     error: r.error,
     durationMs: r.duration_ms,
     createdAt: r.created_at,

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { CircleAlert, Loader2, Play } from "lucide-react";
 import { runToolAction } from "@/app/actions";
 import { ResultView } from "@/components/result-view";
+import { RunFiles } from "@/components/run-files";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ export function SchemaForm({ toolId, schema }: { toolId: string; schema: Schema 
               <Badge variant="secondary">v{result.version}</Badge>
               <span>finished in {result.durationMs} ms</span>
             </div>
+            <RunFiles files={result.files} />
             <ResultView output={result.output} />
           </div>
         ) : (

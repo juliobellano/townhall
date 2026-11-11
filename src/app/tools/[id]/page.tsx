@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import { AccessBadge } from "@/components/access-badge";
 import { SchemaForm } from "@/components/schema-form";
 import { ChangeCard } from "@/components/change-card";
+import { RunFiles } from "@/components/run-files";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +112,7 @@ export default async function ToolPage({ params }: { params: Promise<{ id: strin
                 <TableHead>Agent</TableHead>
                 <TableHead>Version</TableHead>
                 <TableHead>Result</TableHead>
+                <TableHead>Files</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,6 +124,9 @@ export default async function ToolPage({ params }: { params: Promise<{ id: strin
                   <TableCell>v{r.version}</TableCell>
                   <TableCell>
                     {r.ok ? <Badge variant="secondary">ok</Badge> : r.denied ? <Badge variant="outline">denied</Badge> : <Badge variant="destructive">failed</Badge>}
+                  </TableCell>
+                  <TableCell>
+                    <RunFiles files={r.files} compact />
                   </TableCell>
                 </TableRow>
               ))}

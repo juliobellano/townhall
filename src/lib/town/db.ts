@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS runs (
   ok INTEGER NOT NULL,
   output TEXT,
   error TEXT,
+  files TEXT NOT NULL DEFAULT '[]',
   duration_ms INTEGER NOT NULL,
   created_at TEXT NOT NULL
 );
@@ -83,6 +84,8 @@ export function getDb(): DatabaseSync {
   // Databases created before access control have no access column. Existing tools stay open to everyone.
   const toolCols = db.prepare("PRAGMA table_info(tools)").all() as { name: string }[];
   if (!toolCols.some((c) => c.name === "access")) db.exec("ALTER TABLE tools ADD COLUMN access TEXT NOT NULL DEFAULT '[]'");
+  const runCols = db.prepare("PRAGMA table_info(runs)").all() as { name: string }[];
+  if (!runCols.some((c) => c.name === "files")) db.exec("ALTER TABLE runs ADD COLUMN files TEXT NOT NULL DEFAULT '[]'");
   g.__townDb = db;
   g.__townDbFile = file;
   g.__townDbIno = inodeOf(file) ?? undefined;

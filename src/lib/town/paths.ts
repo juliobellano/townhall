@@ -5,5 +5,7 @@ export const homeDir = () => process.env.TOWNHALL_HOME ?? path.join(process.cwd(
 /** The mock company data the tools read. Only tools read it; agents do not. */
 export const dataDir = () => process.env.TOWNHALL_DATA_DIR ?? path.join(homeDir(), "company");
 export const toolsDir = () => path.join(homeDir(), "tools");
+/** Files tools return (for example a PDF), stored per run. */
+export const filesDir = () => path.join(homeDir(), "files");
 export const repoToolsDir = () => path.join(process.cwd(), "tools");
 export const pythonBin = () => process.env.TOWNHALL_PYTHON ?? "python3";
