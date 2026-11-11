@@ -98,3 +98,7 @@ Sources:
     - e.g.: my agent can use julio's agent, but I realize that there are some changes that I need in the workflow, so my agent reaches out to the workflow creator's agent and they will reason together, and improve together, and then re-deploy the tools on the spot.
 
 
+## scenarios town hall can win against letting claude re-generating
+
+- gathering data from 30 different places and all 30 of them are behind 5 different reverse proxies and locked behind vpn servers and are not documented anywhere
+- peculiar throw-away or scripts testing things that are not clearly documented.
