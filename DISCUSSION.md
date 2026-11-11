@@ -43,6 +43,15 @@ e.g. not every one know what is python or go or how to even open a shell.
 
 so, our product enables everyone's agents (executing the shared tools maybe through MCP or other necessary interfaces) to run their workflow whatever the stack is.
 
+## our selling point
+
+Defenses against "just let each agent regenerate it":
+
+1. generated versions drift, enterprise documents must be identical
+2. internal workflows touch sensitive data that cannot leave the company
+
+this is why a shared, canonical tool beats every agent making its own.
+
 ## defending our idea
 
 1. you might argue that, since the workflows are very easy to make, you should just let everyone's agents make their own version of the workflow.
@@ -52,6 +61,30 @@ effect:
 
 2. internal tools or workflows are made to handle sensitive data that might not be able to go out of the company. (we cannot ask agents to take the data directly)
     - so, tools/workflows like this are still necessary.
+
+## landscape
+
+(from a /office-hours web search on 2026-11-11, generic category terms only. most sources are vendor marketing, so treat claims as directional.)
+
+**Layer 1: what everyone knows.** There are two crowded camps.
+- MCP gateways and governance: Runlayer, MintMCP, Metorial, Celigo, CData. They sit between agents and tools that already exist and add per-user identity, audit and permissions.
+- "Publish your vibe-coded app behind company login": Island, TeamOnly, Netlify, Retool, and Vybe (a YC company). They assume you already have an app.
+
+**Layer 2: current discourse.**
+- Per a June 2026 forum thread reported in one source, Retool agents can consume MCP but don't expose workflows as MCP tools for external agents.
+- Another source says Retool's audit logs don't cover agent tool calls.
+
+**Layer 3: our situation.** Neither camp starts where Sarah is. She has a script on her laptop that touches 30 databases. It isn't an app and it isn't an MCP server. Our claim is that the unit is the workflow, whatever the stack, and the MCP is generated from the code. That's a real gap, but the neighbors are close, and Vybe is YC so some alums will know it.
+
+Answer to "isn't this Vybe or Retool?": they host apps, and gateways govern tools that already exist. We take the thing on Sarah's laptop and make it callable.
+
+Sources:
+- [Celigo MCP management](https://siliconangle.com/2026/10/20/celigo-launches-mcp-tool-management-for-enterprise-ai-assistants-and-agent-access/)
+- [MintMCP on gateways](https://www.mintmcp.com/blog/mcp-gateways-internal-tool-integration)
+- [Retool MCP gateway discussion](https://www.stackone.com/blog/best-mcp-gateway-for-retool/)
+- [Island vibe publishing](https://www.island.io/product/ai/enterprise-vibe-publishing)
+- [TeamOnly MCP](https://mcpservers.org/ru/servers/sohelsd/teamonly-mcp)
+- [Vybe (YC)](https://www.ycombinator.com/companies/vybe)
 
 ## core features
 
