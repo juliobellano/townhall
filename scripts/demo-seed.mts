@@ -1,7 +1,8 @@
 /**
  * Seeds the demo: the mock company data and the canonical tool, published as Sarah.
  *   npm run demo:seed            keep existing data, publish if missing
- *   npm run demo:seed -- --fresh wipe data/ first (tools, runs, changes)
+ *   npm run demo:seed -- --fresh wipe the registry first (tools, runs, changes)
+ *   npm run demo:seed -- --fresh --no-publish   empty catalog, so beat 1 publishes live
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -23,7 +24,9 @@ if (process.argv.includes("--fresh")) {
 if (!fs.existsSync(path.join(dataDir(), "jakarta.db"))) {
   execFileSync("python3", [path.join(root, "scripts", "seed_data.py"), dataDir()], { stdio: "inherit" });
 }
-if (getTool("branch-finance-report")) {
+if (process.argv.includes("--no-publish")) {
+  console.log("catalog left empty (--no-publish): beat 1 publishes the tool live");
+} else if (getTool("branch-finance-report")) {
   console.log("tool already published: branch-finance-report");
 } else {
   const res = await publishTool(
