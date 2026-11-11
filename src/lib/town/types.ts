@@ -25,6 +25,9 @@ export type ToolDetail = ToolSummary & {
   checks: Check;
 };
 
+/** A file a tool returned, stored by Town Hall. `url` is site-relative: /api/files/<runId>/<name>. */
+export type RunFile = { name: string; mimeType: string; bytes: number; url: string };
+
 export type RunRecord = {
   id: number;
   toolId: string;
@@ -36,6 +39,7 @@ export type RunRecord = {
   /** The run was refused by access control (still audited). */
   denied: boolean;
   output: unknown;
+  files: RunFile[];
   error: string | null;
   durationMs: number;
   createdAt: string;

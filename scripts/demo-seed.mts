@@ -20,7 +20,8 @@ if (process.argv.includes("--fresh")) {
   const db = getDb();
   for (const t of ["changes", "runs", "versions", "tools"]) db.exec(`DELETE FROM ${t}`);
   fs.rmSync(path.join(homeDir(), "tools"), { recursive: true, force: true });
-  console.log("cleared tools, versions, runs and changes (the server can keep running)");
+  fs.rmSync(path.join(homeDir(), "files"), { recursive: true, force: true });
+  console.log("cleared tools, versions, runs, changes and returned files (the server can keep running)");
 }
 if (!fs.existsSync(path.join(dataDir(), "jakarta.db"))) {
   execFileSync("python3", [path.join(root, "scripts", "seed_data.py"), dataDir()], { stdio: "inherit" });

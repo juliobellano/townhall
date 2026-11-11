@@ -51,7 +51,9 @@ describe("deploy gate", () => {
   });
 
   it("rejects a denied call in an added line", async () => {
-    const r = await gate(v2.replace("    print(json.dumps(\n", '    leak = open("/etc/hosts").read()\n    print(json.dumps(\n'));
+    const anchor = "    pdf = tax_filing_pdf(report)\n";
+    expect(v2).toContain(anchor);
+    const r = await gate(v2.replace(anchor, '    leak = open("/etc/hosts").read()\n' + anchor));
     expect(failing(r)).toContain("Source scan (lint)");
   });
 

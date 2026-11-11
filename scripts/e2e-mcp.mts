@@ -78,7 +78,7 @@ try {
   check("MCP lists the five Town Hall tools", tools.join() === "get_tool,publish_tool,request_change,run_tool,search_tools", tools.join());
 
   // Beat 1: Sarah's agent publishes the tool.
-  const pub = await sarah.call("publish_tool", { name: "Tax filing report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], source: v1, fixtures: [{ month: "2026-10" }], expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }] });
+  const pub = await sarah.call("publish_tool", { name: "Tax filing report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], access: ["engineering", "sales"], source: v1, fixtures: [{ month: "2026-10" }], expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }] });
   check("beat 1: Sarah's agent publishes the tool", !pub.isError && pub.body.tool?.id === "tax-filing-report", JSON.stringify(pub.body).slice(0, 200));
 
   // Beat 2: Maria's agent finds it, reads the schema, runs it.
@@ -90,6 +90,11 @@ try {
   check("beat 2: a missing required input is a clear error", bad.isError && bad.body.code === "invalid_inputs");
   const run1 = await maria.call("run_tool", { id: "tax-filing-report", inputs: { month: "2026-10" } });
   check("beat 2: report totals match the recorded UTC total", run1.body.output?.grand_total === expected.UTC.grand_total, String(run1.body.output?.grand_total));
+  const pdfFile = run1.body.files?.[0];
+  check("beat 2: the run returns tax-filing.pdf as a download link, not bytes", pdfFile?.name === "tax-filing.pdf" && pdfFile.download_url?.startsWith(base + "/api/files/") && !JSON.stringify(run1.body).includes("base64"), JSON.stringify(run1.body.files));
+  const dl = await fetch(pdfFile?.download_url ?? base, { headers: { "x-townhall-user": "maria", "x-townhall-agent": "claude-desktop" } });
+  const pdfBytes = Buffer.from(await dl.arrayBuffer());
+  check("beat 2: Maria's agent downloads a real PDF", dl.status === 200 && dl.headers.get("content-type") === "application/pdf" && pdfBytes.subarray(0, 5).toString() === "%PDF-" && pdfBytes.toString("latin1").includes("1,620,060"), `${dl.status} ${pdfBytes.length}`);
 
   // Beat 4: Maria's agent needs a timezone, asks the creator agent, then uses it.
   const tz = await maria.call("run_tool", { id: "tax-filing-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
@@ -113,7 +118,9 @@ try {
   const eng = await sarah.call("publish_tool", { name: "On-call lookup", description: "Who is on call for a service. Engineering only.", source: oncall, access: ["engineering"], fixtures: [{ service: "payments" }] });
   check("access: Sarah publishes an engineering-only tool", !eng.isError && eng.body.tool?.access?.join() === "engineering", JSON.stringify(eng.body).slice(0, 200));
   const alexSees = (await alex.call("search_tools", {})).body.tools?.map((t: { id: string }) => t.id) ?? [];
-  check("access: Marketing's search does not list the engineering-only tool", alexSees.includes("tax-filing-report") && !alexSees.includes("on-call-lookup"), alexSees.join());
+  check("access: Marketing's search lists neither the engineering-only nor the finance tool", !alexSees.includes("tax-filing-report") && !alexSees.includes("on-call-lookup"), alexSees.join());
+  const alexDl = await fetch(pdfFile?.download_url ?? base, { headers: { "x-townhall-user": "alex", "x-townhall-agent": "claude-desktop" } });
+  check("access: Marketing cannot download Maria's tax-filing.pdf", alexDl.status === 403, String(alexDl.status));
   const alexRun = await alex.call("run_tool", { id: "on-call-lookup", inputs: { service: "payments" } });
   check("access: Marketing's run is refused with a reason", alexRun.isError && alexRun.body.code === "forbidden" && /restricted to Engineering/.test(alexRun.body.error), JSON.stringify(alexRun.body).slice(0, 200));
   const mariaGet = await maria.call("get_tool", { id: "on-call-lookup" });
@@ -126,6 +133,7 @@ try {
   check("UI: catalog lists the tool", home_.includes("Tax filing report"));
   const toolPage = await html("/tools/tax-filing-report");
   check("UI: tool page shows v2 and the timezone field", toolPage.includes("v2") && toolPage.includes("timezone"));
+  check("UI: recent runs link tax-filing.pdf", toolPage.includes("tax-filing.pdf"));
   const changes = await html("/changes");
   check("UI: changes page shows the deploy, the gate, and the requester", changes.includes("Deployed") && changes.includes("Deploy gate: passed") && changes.includes("maria") && changes.includes("claude-desktop"));
   const audit = await html("/audit");
@@ -133,7 +141,7 @@ try {
   check("UI: audit log shows the refused run as denied", audit.includes("denied") && audit.includes("alex"));
   check("UI: as Sarah (Engineering) the catalog shows the restricted tool", home_.includes("On-call lookup") && home_.includes("Engineering"));
   const alexHome = await html("/", "alex");
-  check("UI: as Alex (Marketing) the catalog hides it and says one is hidden", !alexHome.includes("On-call lookup") && alexHome.includes("1 tool is restricted"));
+  check("UI: as Alex (Marketing) the catalog hides both and says so", !alexHome.includes("On-call lookup") && !alexHome.includes("Tax filing report") && alexHome.includes("2 tools are restricted"));
   const alexTool = await html("/tools/on-call-lookup", "alex");
   check("UI: as Alex the tool page explains the refusal and shows no form", alexTool.includes("You can't use this tool") || alexTool.includes("You can&#x27;t use this tool"));
   check("UI: unknown tool is a 404", (await fetch(base + "/tools/nope")).status === 404);
