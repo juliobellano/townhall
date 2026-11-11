@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GitPullRequest, Landmark, ScrollText, Wrench } from "lucide-react";
+import { GitPullRequest, Landmark, Play, ScrollText, Wrench } from "lucide-react";
 import { ViewerSwitch } from "@/components/viewer-switch";
 import { buttonVariants } from "@/components/ui/button";
 import { DEPARTMENT_LABELS, DIRECTORY } from "@/lib/town/access";
@@ -9,6 +9,7 @@ const links = [
   { href: "/", label: "Tools", icon: Wrench },
   { href: "/changes", label: "Changes", icon: GitPullRequest },
   { href: "/audit", label: "Audit", icon: ScrollText },
+  { href: "/tour", label: "Tour", icon: Play },
 ];
 
 export async function SiteHeader() {
