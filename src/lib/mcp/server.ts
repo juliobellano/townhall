@@ -101,10 +101,23 @@ export function createTownMcpServer(identity: Identity): McpServer {
         source: z.string().describe("The full Python source of the script"),
         touches: z.array(z.string()).optional().describe("What the tool reads or calls, for example ['branch databases (read only)']"),
         owner: z.string().optional().describe("Defaults to you"),
+        fixtures: z
+          .array(z.record(z.string(), z.unknown()))
+          .optional()
+          .describe(
+            "Example inputs, one object per example, for example [{\"month\": \"2026-10\"}]. When a colleague's agent later asks for a change, a new version must give the same output for these. Strongly recommended: a tool with no fixtures cannot accept auto-deployed changes.",
+          ),
+        expectations: z
+          .array(z.object({ inputs: z.record(z.string(), z.unknown()), expect: z.record(z.string(), z.unknown()) }))
+          .optional()
+          .describe("Optional recorded results for inputs a future version may add: {inputs, expect} where expect is a partial match on the output."),
       },
     },
-    async ({ name, description, source, touches, owner }) => {
-      const res = await publishTool({ name, description, source, touches, owner }, identity);
+    async ({ name, description, source, touches, owner, fixtures, expectations }) => {
+      const res = await publishTool(
+        { name, description, source, touches, owner, checks: { fixtures: fixtures?.map((inputs) => ({ inputs })), expectations } },
+        identity,
+      );
       return res.ok ? json({ ok: true, tool: res.tool }) : json(res, true);
     },
   );

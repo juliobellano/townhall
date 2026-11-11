@@ -54,6 +54,8 @@ describe("Town Hall MCP tools, end to end through an MCP client", () => {
       description: "Monthly sales totals per branch from the company branch databases.",
       touches: ["branch databases (read only)"],
       source: readTool("v1.py"),
+      fixtures: [{ month: "2026-10" }],
+      expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }],
     });
     expect(ok.isError).toBe(false);
     expect(ok.body.tool).toMatchObject({ id: "branch-finance-report", owner: "sarah", latestVersion: 1 });

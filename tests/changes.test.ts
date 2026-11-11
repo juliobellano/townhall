@@ -66,6 +66,13 @@ describe("requestChange: other outcomes are recorded and v1 stays live", () => {
     expect(c.diff).toBeTruthy();
     expect(getTool(id)!.latestVersion).toBe(1);
   });
+  it("blocks an auto-deploy for a tool published without fixtures", async () => {
+    const id = await newTool(v1, {});
+    const c = asChange(await requestChange({ toolId: id, need: NEED }, maria, { creator: stub(async () => ({ decision: "accept", reason: "ok", newSource: v2 })) }));
+    expect(c.status).toBe("gate_failed");
+    expect(c.gate?.checks.find((x) => !x.pass)?.detail).toMatch(/no fixtures recorded/);
+    expect(getTool(id)!.latestVersion).toBe(1);
+  });
   it("treats an accept with no source as an error", async () => {
     const id = await newTool();
     const c = asChange(await requestChange({ toolId: id, need: NEED }, maria, { creator: stub(async () => ({ decision: "accept", reason: "ok" })) }));

@@ -133,10 +133,15 @@ export async function runDeployGate(args: {
         problems.push(`output changed at defaults for ${JSON.stringify(fx.inputs)}`);
       }
     }
+    const noFixtures = fixtures.length === 0;
     checks.push({
       name: "Fixture runs (compatibility)",
-      pass: problems.length === 0,
-      detail: problems.length === 0 ? `${fixtures.length} fixture${fixtures.length === 1 ? "" : "s"}: new version equals previous version at defaults` : problems.join("; "),
+      pass: !noFixtures && problems.length === 0,
+      detail: noFixtures
+        ? "no fixtures recorded for this tool, so the new version cannot be checked against the old one. Publish the tool with at least one example input."
+        : problems.length === 0
+          ? `${fixtures.length} fixture${fixtures.length === 1 ? "" : "s"}: new version equals previous version at defaults`
+          : problems.join("; "),
     });
 
     // Expectations: recorded results for inputs the new schema now supports.

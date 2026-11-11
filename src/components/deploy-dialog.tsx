@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 export function DeployDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", touches: "", source: "" });
+  const [form, setForm] = useState({ name: "", description: "", touches: "", source: "", fixtures: "" });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -26,7 +26,7 @@ export function DeployDialog() {
       const res = await publishToolAction(form);
       if (res.ok) {
         setOpen(false);
-        setForm({ name: "", description: "", touches: "", source: "" });
+        setForm({ name: "", description: "", touches: "", source: "", fixtures: "" });
         router.push(`/tools/${res.id}`);
       } else {
         setError(res.error);
@@ -63,6 +63,11 @@ export function DeployDialog() {
           <div className="space-y-1.5">
             <Label htmlFor="source">Python source</Label>
             <Textarea id="source" value={form.source} onChange={set("source")} className="h-56 font-mono text-xs" required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="fixtures">Example inputs (JSON array, recommended)</Label>
+            <Textarea id="fixtures" value={form.fixtures} onChange={set("fixtures")} className="h-16 font-mono text-xs" placeholder='[{"month": "2026-10"}]' />
+            <p className="text-xs text-muted-foreground">Used to check that a future change gives the same output. Without them, agent-written changes cannot be auto-deployed.</p>
           </div>
           {error && (
             <Alert variant="destructive">

@@ -65,6 +65,15 @@ describe("deploy gate", () => {
     expect(failing(r)).toContain("Fixture runs (compatibility)");
   });
 
+  it("fails the compatibility check when the tool has no fixtures, instead of passing vacuously", async () => {
+    const pub = await publishTool({ name: "Unchecked report", description: "A tool published with no example inputs.", source: readTool("v1.py") }, sarah);
+    expect(pub.ok).toBe(true);
+    const prev = getVersion("unchecked-report", 1)!;
+    const r = await runDeployGate({ toolId: "unchecked-report", prevVersion: 1, prevSource: prev.source, prevSchema: prev.schema, nextSource: v2, checks: {} });
+    expect(failing(r)).toEqual(["Fixture runs (compatibility)"]);
+    expect(r.checks.find((c) => !c.pass)!.detail).toMatch(/no fixtures recorded/);
+  });
+
   it("rejects a script that breaks the tool contract", async () => {
     const r = await gate("import json\nprint(json.dumps({'x': 1}))\n");
     expect(failing(r)).toEqual(["Tool contract"]);

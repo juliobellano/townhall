@@ -77,7 +77,7 @@ try {
   check("MCP lists the five Town Hall tools", tools.join() === "get_tool,publish_tool,request_change,run_tool,search_tools", tools.join());
 
   // Beat 1: Sarah's agent publishes the tool.
-  const pub = await sarah.call("publish_tool", { name: "Branch finance report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], source: v1 });
+  const pub = await sarah.call("publish_tool", { name: "Branch finance report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], source: v1, fixtures: [{ month: "2026-10" }], expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }] });
   check("beat 1: Sarah's agent publishes the tool", !pub.isError && pub.body.tool?.id === "branch-finance-report", JSON.stringify(pub.body).slice(0, 200));
 
   // Beat 2: Maria's agent finds it, reads the schema, runs it.
