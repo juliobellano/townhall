@@ -6,14 +6,23 @@ The video shows four beats on one protagonist: Sarah's branch finance report.
 
 ```bash
 npm install
-npm run demo:seed -- --fresh --no-publish   # empty catalog, so beat 1 publishes live
-#   (use `npm run demo:seed -- --fresh` instead to start with the tool already published)
+npm run demo:seed -- --fresh                # data + the tool already published as Sarah (the reliable default)
 npm run build && npm start                  # film against the production build, not `next dev`
 npm run demo:setup                          # writes demo/.runtime/{sarah,maria}
 npm run eval:creator -- --runs 5            # film the finale live only if it prints "film the finale live"
 ```
 
-Open `http://localhost:3000` for the human interface. Reset between takes with `npm run demo:seed -- --fresh --no-publish`; the server can keep running.
+**The finale is cached today.** No live creator agent could run in the build environment (no `ANTHROPIC_API_KEY`, expired CLI login), so `eval:creator` currently prints "use the cached decision" and every beat 4 take shows the **cached decision** badge. Set `ANTHROPIC_API_KEY` (or run `claude login`) and re-run the eval to find out whether a live finale is reliable.
+
+**Publishing live in beat 1 is optional, and risky.** The stored cached decision only applies when the tool's source is exactly `tools/branch-report/v1.py`, and the gate only passes when the fixtures were sent too. If Claude Code re-types the script and changes a character, or drops the fixtures, beat 4 shows an error or a blocked change on camera. To use the live path, start from an empty catalog with `npm run demo:seed -- --fresh --no-publish`, rehearse it once, and confirm the stored source matches before filming:
+
+```bash
+sqlite3 data/townhall.db "select source from versions where tool_id='branch-finance-report' and version=1" | sed '$d' | diff - tools/branch-report/v1.py
+```
+
+If the diff prints nothing and the changes page shows the gate passing on a rehearsal change, the live publish is safe to film. Otherwise film beat 1 on a scratch tool and run the rest on the seeded one.
+
+Open `http://localhost:3000` for the human interface. Reset between takes with `npm run demo:seed -- --fresh` (add `--no-publish` for the live-publish path); the server can keep running.
 
 Start the two agent sessions in separate terminals:
 
@@ -26,12 +35,12 @@ Claude Code may ask you to approve the project MCP server the first time. Each c
 
 ## Run of show
 
-1. **Publish (Sarah's Claude Code).** Ask: *"Publish tools/branch-report/v1.py to Town Hall as 'Branch finance report'. It reads the branch databases (read only). Use fixtures [{"month":"2026-10"}] and an expectation that inputs {"month":"2026-10","timezone":"Asia/Jakarta"} gives grand_total 1542360."* The tool appears in the catalog with its schema.
+1. **Publish (Sarah's Claude Code), live path only.** With the seeded default, show the tool already in the catalog instead, or film this beat on a scratch tool. Ask: *"Publish tools/branch-report/v1.py to Town Hall as 'Branch finance report'. It reads the branch databases (read only). Use fixtures [{"month":"2026-10"}] and an expectation that inputs {"month":"2026-10","timezone":"Asia/Jakarta"} gives grand_total 1542360."* The tool appears in the catalog with its schema.
 2. **Use (the colleague).** Ask: *"Give me the branch finance report."* It should search, read the schema, ask which month, run it, and show the totals. Then ask it to *"read the branch databases directly"* to show the refusal (see Demo policy below).
 3. **Human (browser).** Search the catalog, open the tool, run it from the generated form, then show the Audit page (person and agent for every run).
 4. **Collaborate (the colleague).** Ask: *"Run it again, but cut the month off at Asia/Jakarta midnight."* The tool has no timezone input, so the agent calls `request_change`. Show the Changes page: the creator's reasoning, the five-check deploy gate, the diff. Then the agent calls `get_tool`, sees `timezone`, and reruns: the October total moves from 1,620,060 to 1,542,360.
 
-If the live publish in beat 1 fails on a take, `npm run demo:seed -- --fresh` publishes the same tool as Sarah.
+If the live publish in beat 1 fails on a take, `npm run demo:seed -- --fresh` resets and publishes the same tool as Sarah.
 
 ## Say this, honestly
 
