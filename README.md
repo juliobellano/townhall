@@ -4,6 +4,8 @@
 
 > Everyone's agents can make internal tools, but my boss likes mine better.
 
+**[▶ Watch the 25-second interactive tour](https://juliobellano.github.io/townhall/)**
+
 ## Why
 
 Small internal tools are everywhere: a monthly finance report, an on-call lookup, an admin button. They get built fast, often by an agent, and then they stay on one laptop. The code isn't the hard part. Sharing is: company login, safe access to company data, hosting, and someone who owns the tool after its builder moves on.
