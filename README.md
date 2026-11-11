@@ -40,4 +40,11 @@ A tool is a Python script that reads JSON inputs on stdin, writes a JSON result 
 
 ## Creator agent backends
 
-`TOWNHALL_CREATOR=auto` (default) tries the Anthropic API (if `ANTHROPIC_API_KEY` is set), then a locked-down Claude Code CLI (no tools, no MCP, empty temp directory), then the stored cached decision, which is always labeled "cached decision" in the UI. Force one with `TOWNHALL_CREATOR=api|cli|cached`.
+Copy `.env.example` to `.env.local` (gitignored) and set `ANTHROPIC_API_KEY`. `TOWNHALL_CREATOR=auto` (default) then tries, in order:
+
+1. **GMI Cloud Router**, only if `GMI_API_KEY` is set (off by default). Mode from `GMI_ROUTER_MODE` (default `quality`); the router picks the model per call and the agent replies in tags that Town Hall parses.
+2. **Anthropic API** (`ANTHROPIC_API_KEY`): Claude Sonnet 5.5 (`TOWNHALL_CREATOR_MODEL`) at `medium` effort (`TOWNHALL_CREATOR_EFFORT`), adaptive thinking, the decision returned through structured outputs, and server-side refusal fallbacks on.
+3. **Claude Code CLI**, locked down (no tools, no MCP, empty temp directory).
+4. **The stored cached decision**, always labeled "cached decision" in the UI.
+
+The Changes page shows which backend and model decided (for example `api:claude-sonnet-5-5`). Live backends share a time budget (`TOWNHALL_CREATOR_TIMEOUT_MS`, default 90 s). Force one backend with `TOWNHALL_CREATOR=api|gmi|cli|cached`.

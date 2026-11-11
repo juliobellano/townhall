@@ -44,3 +44,4 @@ next-env.d.ts
 /data/
 !/data/.gitkeep
 /demo/.runtime/
+!.env.example
