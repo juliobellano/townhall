@@ -10,7 +10,7 @@ Needs a recent Node with the built-in `node:sqlite` (developed on Node 26) and P
 
 ```bash
 npm install
-npm run demo:seed -- --fresh   # mock company data + the Branch finance report tool
+npm run demo:seed -- --fresh   # mock company data + the Tax filing report tool
 npm run build && npm start     # http://localhost:3000 (MCP at /api/mcp)
 ```
 

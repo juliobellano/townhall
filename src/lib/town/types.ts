@@ -13,6 +13,8 @@ export type ToolSummary = {
   description: string;
   owner: string;
   touches: string[];
+  /** Departments allowed to use the tool. Empty means everyone. The owner can always use it. */
+  access: string[];
   latestVersion: number;
   createdAt: string;
 };
@@ -31,13 +33,15 @@ export type RunRecord = {
   agent: string;
   inputs: unknown;
   ok: boolean;
+  /** The run was refused by access control (still audited). */
+  denied: boolean;
   output: unknown;
   error: string | null;
   durationMs: number;
   createdAt: string;
 };
 
-export type ErrorCode = "not_found" | "invalid_inputs" | "tool_failed" | "contract_violation" | "invalid_request" | "conflict";
+export type ErrorCode = "not_found" | "invalid_inputs" | "tool_failed" | "contract_violation" | "invalid_request" | "conflict" | "forbidden";
 
 export type Failure = { ok: false; code: ErrorCode; error: string };
 export type Success<T> = { ok: true } & T;

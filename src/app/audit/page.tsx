@@ -1,16 +1,24 @@
+import { Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { listRuns } from "@/lib/town/registry";
+import { canAccess } from "@/lib/town/access";
+import { getTool, listRuns } from "@/lib/town/registry";
+import { uiIdentity } from "@/lib/ui-identity";
 
 export const dynamic = "force-dynamic";
 
-export default function AuditPage() {
-  const runs = listRuns(100);
+export default async function AuditPage() {
+  const me = await uiIdentity();
+  // Runs carry inputs and outputs, so only show runs of tools this person may use (including refused attempts on them).
+  const runs = listRuns(100).filter((r) => {
+    const tool = getTool(r.toolId);
+    return tool !== null && canAccess(me, tool);
+  });
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Audit log</h1>
-        <p className="text-sm text-muted-foreground">Every tool run, with the person and the agent that made it. Agents act with the person&apos;s permissions, never more.</p>
+        <p className="text-sm text-muted-foreground">Every tool run, with the person and the agent that made it, including runs refused by access control. Agents act with the person&apos;s permissions, never more. You see runs of the tools you may use.</p>
       </div>
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No runs yet.</p>
@@ -37,7 +45,18 @@ export default function AuditPage() {
                 <TableCell>{r.agent}</TableCell>
                 <TableCell className="max-w-64 truncate font-mono text-xs">{JSON.stringify(r.inputs)}</TableCell>
                 <TableCell>
-                  {r.ok ? <Badge variant="secondary">ok</Badge> : <Badge variant="destructive" title={r.error ?? undefined}>failed</Badge>}
+                  {r.ok ? (
+                    <Badge variant="secondary">ok</Badge>
+                  ) : r.denied ? (
+                    <Badge variant="outline" title={r.error ?? undefined}>
+                      <Lock />
+                      denied
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" title={r.error ?? undefined}>
+                      failed
+                    </Badge>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

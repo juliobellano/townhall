@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { requestChange } from "../town/changes";
-import { getTool, publishTool, runTool, searchTools } from "../town/registry";
+import { DEPARTMENTS } from "../town/access";
+import { getToolFor, publishTool, runTool, searchToolsFor } from "../town/registry";
 import type { Identity } from "../town/types";
 
 export type { Identity };
@@ -37,22 +38,22 @@ export function createTownMcpServer(identity: Identity): McpServer {
     "search_tools",
     {
       description:
-        "Search the company's Town Hall for shared tools. Use this FIRST when you need to do something with company data: a Town Hall tool is the approved, audited way to read it. Leave query empty to list every tool.",
+        "Search the company's Town Hall for shared tools. Use this FIRST when you need to do something with company data: a Town Hall tool is the approved, audited way to read it. Results only include tools your user's department may use. Leave query empty to list them all.",
       inputSchema: { query: z.string().optional().describe("Words to look for in tool names and descriptions") },
     },
-    async ({ query }) => json({ tools: searchTools(query) }),
+    async ({ query }) => json({ tools: searchToolsFor(identity, query) }),
   );
 
   server.registerTool(
     "get_tool",
     {
       description:
-        "Get one tool's details: what it does, its owner, what it touches, and its input schema (inputSchema) for the latest version. Always read the schema before run_tool, and ask the user for any required input you do not have.",
+        "Get one tool's details: what it does, its owner, what it touches, which departments may use it (access, empty means everyone), and its input schema (inputSchema) for the latest version. Always read the schema before run_tool, and ask the user for any required input you do not have.",
       inputSchema: { id: z.string().describe("Tool id from search_tools") },
     },
     async ({ id }) => {
-      const tool = getTool(id);
-      return tool ? json({ tool }) : json({ ok: false, code: "not_found", error: `No tool with id "${id}". Use search_tools.` }, true);
+      const res = getToolFor(id, identity);
+      return res.ok ? json({ tool: res.tool }) : json(res, true);
     },
   );
 
@@ -60,7 +61,7 @@ export function createTownMcpServer(identity: Identity): McpServer {
     "run_tool",
     {
       description:
-        "Run a tool and get its result. Inputs must match the tool's inputSchema exactly: unknown inputs are rejected, not ignored. The run is audited with your user and agent. Omit version to use the latest.",
+        "Run a tool and get its result. Inputs must match the tool's inputSchema exactly: unknown inputs are rejected, not ignored. The run is audited with your user and agent, including runs refused by access control (code 'forbidden'). Omit version to use the latest.",
       inputSchema: {
         id: z.string().describe("Tool id"),
         inputs: z.record(z.string(), z.unknown()).describe("Inputs matching the tool's inputSchema"),
@@ -96,11 +97,15 @@ export function createTownMcpServer(identity: Identity): McpServer {
     {
       description: `Publish a new tool to Town Hall so colleagues and their agents can use it. ${TOOL_CONTRACT} Town Hall reads the input schema from the script itself, and rejects a script that does not follow this contract, with instructions on how to fix it.`,
       inputSchema: {
-        name: z.string().describe("Short tool name, for example 'Branch finance report'"),
+        name: z.string().describe("Short tool name, for example 'Tax filing report'"),
         description: z.string().describe("What the tool does and returns, in a sentence or two"),
         source: z.string().describe("The full Python source of the script"),
         touches: z.array(z.string()).optional().describe("What the tool reads or calls, for example ['branch databases (read only)']"),
         owner: z.string().optional().describe("Defaults to you"),
+        access: z
+          .array(z.enum(DEPARTMENTS))
+          .optional()
+          .describe("Departments allowed to use the tool, for example [\"engineering\"]. Omit for everyone. The owner can always use it."),
         fixtures: z
           .array(z.record(z.string(), z.unknown()))
           .optional()
@@ -113,9 +118,9 @@ export function createTownMcpServer(identity: Identity): McpServer {
           .describe("Optional recorded results for inputs a future version may add: {inputs, expect} where expect is a partial match on the output."),
       },
     },
-    async ({ name, description, source, touches, owner, fixtures, expectations }) => {
+    async ({ name, description, source, touches, owner, access, fixtures, expectations }) => {
       const res = await publishTool(
-        { name, description, source, touches, owner, checks: { fixtures: fixtures?.map((inputs) => ({ inputs })), expectations } },
+        { name, description, source, touches, owner, access, checks: { fixtures: fixtures?.map((inputs) => ({ inputs })), expectations } },
         identity,
       );
       return res.ok ? json({ ok: true, tool: res.tool }) : json(res, true);

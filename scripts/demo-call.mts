@@ -2,8 +2,8 @@
  * Plays an agent from the terminal, for rehearsal and for checking the UI without a Claude client.
  *   npm run demo:call -- <user> <agent> <tool> '<json args>'
  * Example:
- *   npm run demo:call -- maria claude-desktop run_tool '{"id":"branch-finance-report","inputs":{"month":"2026-10"}}'
- *   npm run demo:call -- maria claude-desktop request_change '{"id":"branch-finance-report","need":"I need a timezone input"}'
+ *   npm run demo:call -- maria claude-desktop run_tool '{"id":"tax-filing-report","inputs":{"month":"2026-10"}}'
+ *   npm run demo:call -- maria claude-desktop request_change '{"id":"tax-filing-report","need":"I need a timezone input"}'
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";

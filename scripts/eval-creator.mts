@@ -37,7 +37,7 @@ for (let i = 1; i <= runs; i++) {
   resetDb();
   const pub = await publishTool(
     {
-      name: "Branch finance report",
+      name: "Tax filing report",
       description: "Monthly sales totals per branch from the company branch databases.",
       source: v1,
       checks: {

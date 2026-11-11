@@ -1,19 +1,45 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Lock } from "lucide-react";
+import { AccessBadge } from "@/components/access-badge";
 import { SchemaForm } from "@/components/schema-form";
 import { ChangeCard } from "@/components/change-card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listChanges } from "@/lib/town/changes";
-import { getTool, listRuns } from "@/lib/town/registry";
+import { getTool, getToolFor, listRuns } from "@/lib/town/registry";
+import { uiIdentity } from "@/lib/ui-identity";
 
 export const dynamic = "force-dynamic";
 
 export default async function ToolPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const tool = getTool(id);
-  if (!tool) notFound();
+  const me = await uiIdentity();
+  const res = getToolFor(id, me);
+  if (!res.ok && res.code === "not_found") notFound();
+  if (!res.ok) {
+    // Restricted: show only what the catalog would, plus why. No schema, source, runs or changes.
+    const t = getTool(id)!;
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold">{t.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <AccessBadge access={t.access} />
+            <span>owner {t.owner}</span>
+          </div>
+        </div>
+        <Alert>
+          <Lock />
+          <AlertTitle>You can&apos;t use this tool</AlertTitle>
+          <AlertDescription>{res.error}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+  const tool = res.tool;
   const runs = listRuns(8, tool.id);
   const changes = listChanges(5, tool.id);
   return (
@@ -26,6 +52,7 @@ export default async function ToolPage({ params }: { params: Promise<{ id: strin
         </div>
         <p className="text-sm">{tool.description}</p>
         <div className="flex flex-wrap gap-1.5">
+          <AccessBadge access={tool.access} />
           {tool.touches.map((x) => (
             <Badge key={x} variant="outline">
               {x}
@@ -93,7 +120,9 @@ export default async function ToolPage({ params }: { params: Promise<{ id: strin
                   <TableCell>{r.person}</TableCell>
                   <TableCell>{r.agent}</TableCell>
                   <TableCell>v{r.version}</TableCell>
-                  <TableCell>{r.ok ? <Badge variant="secondary">ok</Badge> : <Badge variant="destructive">failed</Badge>}</TableCell>
+                  <TableCell>
+                    {r.ok ? <Badge variant="secondary">ok</Badge> : r.denied ? <Badge variant="outline">denied</Badge> : <Badge variant="destructive">failed</Badge>}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

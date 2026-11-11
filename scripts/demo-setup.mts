@@ -1,9 +1,10 @@
 /**
- * Generates the two demo Claude Code sessions' configs under demo/.runtime (gitignored), with
+ * Generates the demo Claude Code sessions' configs under demo/.runtime (gitignored), with
  * absolute paths. It writes files only; it does not touch any user-level or global Claude settings.
  *   npm run demo:setup
  *   cd demo/.runtime/sarah && claude     # Sarah's Claude Code: publishes tools
- *   cd demo/.runtime/maria && claude     # Maria's Claude Desktop stand-in: finds and uses tools
+ *   cd demo/.runtime/maria && claude     # Maria's Claude Desktop stand-in (Sales): finds and uses tools
+ *   cd demo/.runtime/alex && claude      # Alex (Marketing): restricted tools are hidden and refused
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -25,6 +26,8 @@ const mcp = (user: string, agent: string) => ({
 
 write(path.join(out, "sarah", ".mcp.json"), mcp("sarah", "claude-code"));
 write(path.join(out, "maria", ".mcp.json"), mcp("maria", "claude-desktop"));
+// Alex is in Marketing: the access-control beat. The finance report and on-call lookup are refused.
+write(path.join(out, "alex", ".mcp.json"), mcp("alex", "claude-desktop"));
 
 // Demo policy for the colleague's session: no direct access to the company data. This is a
 // policy layer on the agent's tools, not OS isolation, and it can be bypassed by determined

@@ -1,17 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { findPerson } from "@/lib/town/access";
 import { publishTool, runTool } from "@/lib/town/registry";
-import { uiIdentity } from "@/lib/ui-identity";
+import { uiIdentity, VIEWER_COOKIE } from "@/lib/ui-identity";
 
 export async function runToolAction(toolId: string, inputs: Record<string, unknown>, version?: number) {
-  const res = await runTool({ id: toolId, inputs, version }, uiIdentity());
+  const res = await runTool({ id: toolId, inputs, version }, await uiIdentity());
   revalidatePath(`/tools/${toolId}`);
   revalidatePath("/audit");
   return res;
 }
 
-export async function publishToolAction(input: { name: string; description: string; source: string; touches: string; fixtures: string }) {
+export async function publishToolAction(input: { name: string; description: string; source: string; touches: string; fixtures: string; access: string[] }) {
   let fixtures: { inputs: Record<string, unknown> }[] | undefined;
   if (input.fixtures.trim()) {
     try {
@@ -26,7 +28,18 @@ export async function publishToolAction(input: { name: string; description: stri
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const res = await publishTool({ name: input.name, description: input.description, source: input.source, touches, checks: { fixtures } }, uiIdentity());
+  const res = await publishTool(
+    { name: input.name, description: input.description, source: input.source, touches, access: input.access, checks: { fixtures } },
+    await uiIdentity(),
+  );
   revalidatePath("/");
   return res.ok ? ({ ok: true as const, id: res.tool.id }) : res;
+}
+
+/** Switches who the UI acts as (mock login). Only people in the directory; the department comes from the directory, never the client. */
+export async function setViewerAction(user: string) {
+  if (!findPerson(user)) return { ok: false as const, error: `Unknown person: ${user}` };
+  (await cookies()).set(VIEWER_COOKIE, user, { path: "/", sameSite: "lax", httpOnly: true });
+  revalidatePath("/", "layout");
+  return { ok: true as const };
 }

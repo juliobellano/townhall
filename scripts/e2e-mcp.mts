@@ -56,13 +56,14 @@ async function agent(user: string, agentName: string) {
   };
 }
 // Visible text of a page: drop scripts, comments (React puts <!-- --> between adjacent text nodes) and tags.
-const html = async (p: string) =>
-  (await (await fetch(base + p)).text())
+const html = async (p: string, asUser?: string) =>
+  (await (await fetch(base + p, asUser ? { headers: { cookie: `townhall_user=${asUser}` } } : {})).text())
     .replace(/<script[\s\S]*?<\/script>/g, "")
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ");
 const v1 = fs.readFileSync(path.join(root, "tools", "branch-report", "v1.py"), "utf8");
+const oncall = fs.readFileSync(path.join(root, "tools", "oncall-lookup", "v1.py"), "utf8");
 const expected = JSON.parse(fs.readFileSync(path.join(root, "tools", "branch-report", "expected.json"), "utf8"));
 
 try {
@@ -77,49 +78,69 @@ try {
   check("MCP lists the five Town Hall tools", tools.join() === "get_tool,publish_tool,request_change,run_tool,search_tools", tools.join());
 
   // Beat 1: Sarah's agent publishes the tool.
-  const pub = await sarah.call("publish_tool", { name: "Branch finance report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], source: v1, fixtures: [{ month: "2026-10" }], expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }] });
-  check("beat 1: Sarah's agent publishes the tool", !pub.isError && pub.body.tool?.id === "branch-finance-report", JSON.stringify(pub.body).slice(0, 200));
+  const pub = await sarah.call("publish_tool", { name: "Tax filing report", description: "Monthly sales totals per branch from the company branch databases.", touches: ["branch databases (read only)"], source: v1, fixtures: [{ month: "2026-10" }], expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }] });
+  check("beat 1: Sarah's agent publishes the tool", !pub.isError && pub.body.tool?.id === "tax-filing-report", JSON.stringify(pub.body).slice(0, 200));
 
   // Beat 2: Maria's agent finds it, reads the schema, runs it.
-  const found = await maria.call("search_tools", { query: "branch finance" });
-  check("beat 2: Maria's agent finds the tool by search", found.body.tools?.[0]?.id === "branch-finance-report");
-  const got = await maria.call("get_tool", { id: "branch-finance-report" });
+  const found = await maria.call("search_tools", { query: "tax filing" });
+  check("beat 2: Maria's agent finds the tool by search", found.body.tools?.[0]?.id === "tax-filing-report");
+  const got = await maria.call("get_tool", { id: "tax-filing-report" });
   check("beat 2: schema is v1 (no timezone yet)", !("timezone" in (got.body.tool?.inputSchema?.properties ?? {})) && got.body.tool?.inputSchema?.required?.[0] === "month");
-  const bad = await maria.call("run_tool", { id: "branch-finance-report", inputs: {} });
+  const bad = await maria.call("run_tool", { id: "tax-filing-report", inputs: {} });
   check("beat 2: a missing required input is a clear error", bad.isError && bad.body.code === "invalid_inputs");
-  const run1 = await maria.call("run_tool", { id: "branch-finance-report", inputs: { month: "2026-10" } });
+  const run1 = await maria.call("run_tool", { id: "tax-filing-report", inputs: { month: "2026-10" } });
   check("beat 2: report totals match the recorded UTC total", run1.body.output?.grand_total === expected.UTC.grand_total, String(run1.body.output?.grand_total));
 
   // Beat 4: Maria's agent needs a timezone, asks the creator agent, then uses it.
-  const tz = await maria.call("run_tool", { id: "branch-finance-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
+  const tz = await maria.call("run_tool", { id: "tax-filing-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
   check("beat 4: before the change, an undeclared timezone is rejected, not ignored", tz.isError && /Unknown input: timezone/.test(tz.body.error), JSON.stringify(tz.body).slice(0, 200));
   const t0 = Date.now();
-  const chg = await maria.call("request_change", { id: "branch-finance-report", need: "I need a timezone input so the month cutoff matches Asia/Jakarta." });
+  const chg = await maria.call("request_change", { id: "tax-filing-report", need: "I need a timezone input so the month cutoff matches Asia/Jakarta." });
   check("beat 4: the change is deployed as v2", chg.body.change?.status === "deployed" && chg.body.change?.toVersion === 2, JSON.stringify(chg.body).slice(0, 300));
   check("beat 4: the deploy gate passed all checks", chg.body.gate?.pass === true && chg.body.gate.checks.length === 5);
   check(`beat 4: backend is labeled (${chg.body.change?.backend}${chg.body.change?.cached ? ", cached" : ", live"}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`, typeof chg.body.change?.backend === "string");
-  const got2 = await maria.call("get_tool", { id: "branch-finance-report" });
+  const got2 = await maria.call("get_tool", { id: "tax-filing-report" });
   check("beat 4: get_tool now shows timezone and v2", got2.body.tool?.latestVersion === 2 && "timezone" in got2.body.tool.inputSchema.properties);
-  const run2 = await maria.call("run_tool", { id: "branch-finance-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
+  const run2 = await maria.call("run_tool", { id: "tax-filing-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
   check("beat 4: the new field works and moves the total", run2.body.output?.grand_total === expected["Asia/Jakarta"].grand_total, String(run2.body.output?.grand_total));
-  const pinned = await maria.call("run_tool", { id: "branch-finance-report", version: 1, inputs: { month: "2026-10" } });
+  const pinned = await maria.call("run_tool", { id: "tax-filing-report", version: 1, inputs: { month: "2026-10" } });
   check("v1 stays available and unchanged", pinned.body.output?.grand_total === expected.UTC.grand_total && pinned.body.version === 1);
-  const pinnedTz = await maria.call("run_tool", { id: "branch-finance-report", version: 1, inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
+  const pinnedTz = await maria.call("run_tool", { id: "tax-filing-report", version: 1, inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
   check("a v1-pinned call with timezone errors instead of returning a wrong total", pinnedTz.isError && pinnedTz.body.code === "invalid_inputs");
+
+  // Access control (mock directory): Sarah is Engineering, Maria Sales, Alex Marketing.
+  const alex = await agent("alex", "claude-desktop");
+  const eng = await sarah.call("publish_tool", { name: "On-call lookup", description: "Who is on call for a service. Engineering only.", source: oncall, access: ["engineering"], fixtures: [{ service: "payments" }] });
+  check("access: Sarah publishes an engineering-only tool", !eng.isError && eng.body.tool?.access?.join() === "engineering", JSON.stringify(eng.body).slice(0, 200));
+  const alexSees = (await alex.call("search_tools", {})).body.tools?.map((t: { id: string }) => t.id) ?? [];
+  check("access: Marketing's search does not list the engineering-only tool", alexSees.includes("tax-filing-report") && !alexSees.includes("on-call-lookup"), alexSees.join());
+  const alexRun = await alex.call("run_tool", { id: "on-call-lookup", inputs: { service: "payments" } });
+  check("access: Marketing's run is refused with a reason", alexRun.isError && alexRun.body.code === "forbidden" && /restricted to Engineering/.test(alexRun.body.error), JSON.stringify(alexRun.body).slice(0, 200));
+  const mariaGet = await maria.call("get_tool", { id: "on-call-lookup" });
+  check("access: Sales cannot read the engineering-only tool either", mariaGet.isError && mariaGet.body.code === "forbidden");
+  const sarahRun = await sarah.call("run_tool", { id: "on-call-lookup", inputs: { service: "payments" } });
+  check("access: Engineering can run it", !sarahRun.isError && sarahRun.body.output?.on_call === "sarah");
 
   // The pages a human sees.
   const home_ = await html("/");
-  check("UI: catalog lists the tool", home_.includes("Branch finance report"));
-  const toolPage = await html("/tools/branch-finance-report");
+  check("UI: catalog lists the tool", home_.includes("Tax filing report"));
+  const toolPage = await html("/tools/tax-filing-report");
   check("UI: tool page shows v2 and the timezone field", toolPage.includes("v2") && toolPage.includes("timezone"));
   const changes = await html("/changes");
   check("UI: changes page shows the deploy, the gate, and the requester", changes.includes("Deployed") && changes.includes("Deploy gate: passed") && changes.includes("maria") && changes.includes("claude-desktop"));
   const audit = await html("/audit");
   check("UI: audit log shows person and agent for runs", audit.includes("maria") && audit.includes("claude-desktop"));
+  check("UI: audit log shows the refused run as denied", audit.includes("denied") && audit.includes("alex"));
+  check("UI: as Sarah (Engineering) the catalog shows the restricted tool", home_.includes("On-call lookup") && home_.includes("Engineering"));
+  const alexHome = await html("/", "alex");
+  check("UI: as Alex (Marketing) the catalog hides it and says one is hidden", !alexHome.includes("On-call lookup") && alexHome.includes("1 tool is restricted"));
+  const alexTool = await html("/tools/on-call-lookup", "alex");
+  check("UI: as Alex the tool page explains the refusal and shows no form", alexTool.includes("You can't use this tool") || alexTool.includes("You can&#x27;t use this tool"));
   check("UI: unknown tool is a 404", (await fetch(base + "/tools/nope")).status === 404);
 
   await sarah.client.close();
   await maria.client.close();
+  await alex.client.close();
 } catch (e) {
   failures++;
   console.log("FAIL  unexpected error:", (e as Error).message);

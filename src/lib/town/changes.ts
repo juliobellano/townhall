@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createTwoFilesPatch } from "diff";
+import { accessDenied, canAccess } from "./access";
 import { getDb, now } from "./db";
 import { runDeployGate, type GateResult } from "./gate";
 import { materialize, fail, getTool, getVersion } from "./registry";
@@ -115,6 +116,7 @@ export async function requestChange(
   if (need.length < 10 || need.length > 2000) return fail("invalid_request", "need must be 10 to 2000 characters: describe the field or change you want.");
   const tool = getTool(args.toolId);
   if (!tool) return fail("not_found", `No tool with id "${args.toolId}".`);
+  if (!canAccess(identity, tool)) return accessDenied(identity, tool);
   return withToolLock(tool.id, async () => {
     const current = getTool(tool.id)!;
     const prev = getVersion(current.id, current.latestVersion)!;

@@ -50,7 +50,7 @@ describe("Town Hall MCP tools, end to end through an MCP client", () => {
     expect(bad.body.code).toBe("contract_violation");
     expect(bad.body.error).toMatch(/--schema/);
     const ok = await call(c, "publish_tool", {
-      name: "Branch finance report",
+      name: "Tax filing report",
       description: "Monthly sales totals per branch from the company branch databases.",
       touches: ["branch databases (read only)"],
       source: readTool("v1.py"),
@@ -58,45 +58,45 @@ describe("Town Hall MCP tools, end to end through an MCP client", () => {
       expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: expected["Asia/Jakarta"].grand_total } }],
     });
     expect(ok.isError).toBe(false);
-    expect(ok.body.tool).toMatchObject({ id: "branch-finance-report", owner: "sarah", latestVersion: 1 });
+    expect(ok.body.tool).toMatchObject({ id: "tax-filing-report", owner: "sarah", latestVersion: 1 });
   });
 
   it("beat 2: a colleague's agent searches, reads the schema, and runs the tool", async () => {
     const c = await connect(maria);
-    const found = await call(c, "search_tools", { query: "branch finance" });
-    expect(found.body.tools.map((t: { id: string }) => t.id)).toEqual(["branch-finance-report"]);
-    const got = await call(c, "get_tool", { id: "branch-finance-report" });
+    const found = await call(c, "search_tools", { query: "tax filing" });
+    expect(found.body.tools.map((t: { id: string }) => t.id)).toEqual(["tax-filing-report"]);
+    const got = await call(c, "get_tool", { id: "tax-filing-report" });
     expect(got.body.tool.inputSchema.required).toEqual(["month"]);
     expect(Object.keys(got.body.tool.inputSchema.properties)).not.toContain("timezone");
-    const run = await call(c, "run_tool", { id: "branch-finance-report", inputs: { month: "2026-10" } });
+    const run = await call(c, "run_tool", { id: "tax-filing-report", inputs: { month: "2026-10" } });
     expect(run.isError).toBe(false);
     expect(run.body.output.grand_total).toBe(expected.UTC.grand_total);
-    const missing = await call(c, "run_tool", { id: "branch-finance-report", inputs: {} });
+    const missing = await call(c, "run_tool", { id: "tax-filing-report", inputs: {} });
     expect(missing).toMatchObject({ isError: true, body: { code: "invalid_inputs" } });
     expect((await call(c, "get_tool", { id: "nope" })).isError).toBe(true);
   });
 
   it("beat 4: the agent requests a new field, it deploys, and the next call uses it", async () => {
     const c = await connect(maria);
-    const before = await call(c, "run_tool", { id: "branch-finance-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
+    const before = await call(c, "run_tool", { id: "tax-filing-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
     expect(before).toMatchObject({ isError: true, body: { code: "invalid_inputs" } });
-    const change = await call(c, "request_change", { id: "branch-finance-report", need: "I need a timezone input so the month cutoff matches Asia/Jakarta." });
+    const change = await call(c, "request_change", { id: "tax-filing-report", need: "I need a timezone input so the month cutoff matches Asia/Jakarta." });
     expect(change.isError).toBe(false);
     expect(change.body.change).toMatchObject({ status: "deployed", fromVersion: 1, toVersion: 2, cached: true, backend: "cached" });
     expect(change.body.gate.pass).toBe(true);
     expect(change.body.diff).toMatch(/timezone/);
-    const got = await call(c, "get_tool", { id: "branch-finance-report" });
+    const got = await call(c, "get_tool", { id: "tax-filing-report" });
     expect(got.body.tool.latestVersion).toBe(2);
     expect(Object.keys(got.body.tool.inputSchema.properties)).toContain("timezone");
-    const after = await call(c, "run_tool", { id: "branch-finance-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
+    const after = await call(c, "run_tool", { id: "tax-filing-report", inputs: { month: "2026-10", timezone: "Asia/Jakarta" } });
     expect(after.body.output.grand_total).toBe(expected["Asia/Jakarta"].grand_total);
     expect(after.body.version).toBe(2);
-    const pinned = await call(c, "run_tool", { id: "branch-finance-report", version: 1, inputs: { month: "2026-10" } });
+    const pinned = await call(c, "run_tool", { id: "tax-filing-report", version: 1, inputs: { month: "2026-10" } });
     expect(pinned.body.output.grand_total).toBe(expected.UTC.grand_total);
   });
 
   it("audits every call with the caller's user and agent", () => {
-    const runs = listRuns(50, "branch-finance-report");
+    const runs = listRuns(50, "tax-filing-report");
     expect(runs.some((r) => r.person === "maria" && r.agent === "claude-desktop" && r.ok)).toBe(true);
     expect(runs.every((r) => ["maria"].includes(r.person))).toBe(true);
   });
