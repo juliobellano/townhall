@@ -311,8 +311,8 @@ export function ProductTour() {
   return (
     <div className="space-y-4">
       <div ref={stageRef} className="relative overflow-hidden rounded-xl border bg-background shadow-sm select-none">
-        <div className="grid md:grid-cols-2">
-          <Computer who="sarah" chat={s.chats.sarah} prompt={s.prompts.sarah} className="border-b md:border-r md:border-b-0" />
+        <div className="grid gap-4 p-3 md:grid-cols-2 md:gap-14 md:p-4">
+          <Computer who="sarah" chat={s.chats.sarah} prompt={s.prompts.sarah} />
           <Computer who="maria" chat={s.chats.maria} prompt={s.prompts.maria} />
         </div>
 
@@ -524,7 +524,7 @@ function Computer({ who, chat, prompt, className = "" }: { who: Who; chat: Msg[]
     ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" });
   }, [chat]);
   return (
-    <div className={`flex h-[360px] flex-col bg-muted/20 ${className}`}>
+    <div className={`flex h-[360px] flex-col overflow-hidden rounded-xl border bg-muted/20 shadow-sm ${className}`}>
       <div className="flex h-10 items-center justify-between border-b px-3 text-sm">
         <span className="flex items-center gap-1.5 font-medium">
           <Bot className="size-4" />
