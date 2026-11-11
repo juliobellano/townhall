@@ -51,6 +51,7 @@ type State = {
   toast: string | null;
   prompt: string;
   chat: Msg[];
+  ended: boolean; // the script finished: show the summary
 };
 
 type Action =
@@ -76,6 +77,7 @@ const INITIAL: State = {
   toast: null,
   prompt: "",
   chat: [],
+  ended: false,
 };
 
 const PEOPLE: Record<Viewer, { name: string; dept: string }> = {
@@ -269,11 +271,13 @@ export function ProductTour() {
         if (a.t === "push" || a.t === "update") await sleep(280);
       }
     }
-    await sleep(1500);
-    if (my === token.current) play(0); // loop
+    await sleep(1200);
+    if (my === token.current) setS((p) => ({ ...p, ended: true })); // the tour ends on the summary; "Watch again" replays it
   }, []);
 
   useEffect(() => {
+    // Starts the autoplay: it sets state as it plays, on purpose.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     play(0);
     return () => {
       token.current++;
@@ -451,6 +455,30 @@ export function ProductTour() {
             </div>
           </div>
         </div>
+
+        {s.ended && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/95 p-6 animate-in fade-in-0">
+            <div className="max-w-xl space-y-4">
+              <h2 className="text-xl font-semibold">Your agent can talk to the tool creator&apos;s agent</h2>
+              <p className="text-sm text-muted-foreground">
+                When a tool needs a new format or requirement, your agent doesn&apos;t guess and doesn&apos;t regenerate its own copy. It consults the agent that owns the tool.
+              </p>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                <li>Your agent asks the creator&apos;s agent whether the tool should change to meet the new format or requirement.</li>
+                <li>The creator&apos;s agent reasons about it and decides: update the tool, or explain why not.</li>
+                <li>If it updates, a deploy gate checks the new version against recorded examples before it goes live.</li>
+                <li>The old version stays available, and your agent uses the new field right after the deploy.</li>
+                <li>Company SSO on every tool, so every call has a real person and agent behind it.</li>
+                <li>Granular control: tools are limited to departments and roles, and data access is scoped and read-only.</li>
+                <li>Every run, change and refused attempt is in the audit log, and every tool has an owner.</li>
+              </ul>
+              <Button size="sm" onClick={() => jump(0)}>
+                <RotateCcw />
+                Watch again
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Fake cursor */}
         <div
