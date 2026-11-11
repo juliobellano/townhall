@@ -456,6 +456,15 @@ export function ProductTour() {
           </div>
         </div>
 
+        {!s.ended && (
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div key={s.chapter} className="text-center opacity-15 animate-in fade-in-0 zoom-in-95 duration-700">
+              <div className="text-xl font-medium tracking-widest uppercase">Step {s.chapter + 1} of {CHAPTERS.length}</div>
+              <div className="text-5xl font-bold md:text-7xl">{CHAPTERS[s.chapter]}</div>
+            </div>
+          </div>
+        )}
+
         {s.ended && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/95 p-6 animate-in fade-in-0">
             <div className="max-w-xl space-y-4">
