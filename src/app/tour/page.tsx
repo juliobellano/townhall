@@ -9,7 +9,7 @@ export default function TourPage() {
       <div>
         <h1 className="text-2xl font-semibold">Tour</h1>
         <p className="text-sm text-muted-foreground">
-          Share a tool, let a colleague&apos;s agent use it, and watch the creator&apos;s agent ship the field it was missing. Scripted, about 25 seconds.
+          Two people, two computers, one Town Hall. One agent uses the other&apos;s tool, asks for a missing field, and the owner&apos;s agent ships it. Then it works the other way. Scripted, about a minute.
         </p>
       </div>
       <ProductTour />

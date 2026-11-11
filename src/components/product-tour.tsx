@@ -15,42 +15,39 @@ import {
   SendHorizontal,
   ShieldCheck,
   Sparkles,
-  Upload,
-  UserRound,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 /*
- * A scripted, autoplaying walkthrough of Town Hall with a fake cursor. Nothing here calls the
- * backend: the script below drives a mock of the real screens, so it always plays the same way.
+ * A scripted, autoplaying walkthrough of Town Hall with a fake cursor: two people on two computers,
+ * each with their own Claude, sharing tools through Town Hall. Nothing here calls the backend: the
+ * script below drives a mock, so it always plays the same way.
  */
 
-type Viewer = "sarah" | "maria" | "alex";
+type Who = "sarah" | "maria";
 type Msg =
   | { kind: "user"; text: string }
   | { kind: "agent"; text: string }
   | { kind: "call"; name: string; arg: string; status: "running" | "ok" | "error"; note?: string }
-  | { kind: "creator"; text: string }
+  | { kind: "peer"; from: string; text: string }
   | { kind: "result"; rows: [string, string][]; total: string };
+
+type Tool = { id: string; name: string; owner: string; version: number; access: string };
+type Audit = { who: string; what: string; ok: boolean };
 
 type State = {
   chapter: number;
-  viewer: Viewer;
-  menu: boolean;
-  dialog: boolean;
-  name: string;
-  access: string[];
-  published: boolean;
-  version: 1 | 2;
-  gate: number; // -1 hidden, else checks passed so far
+  chats: Record<Who, Msg[]>;
+  prompts: Record<Who, string>;
+  tools: Tool[];
+  gate: { tool: string; n: number } | null; // checks passed so far
+  relay: string | null; // a message passing between the two agents through Town Hall
+  audit: Audit[];
   toast: string | null;
-  prompt: string;
-  chat: Msg[];
   ended: boolean; // the script finished: show the summary
 };
 
@@ -60,125 +57,137 @@ type Action =
   | { t: "click" }
   | { t: "wait"; ms: number }
   | { t: "set"; patch: Partial<State> }
-  | { t: "type"; field: "name" | "prompt"; text: string }
-  | { t: "push"; msg: Msg }
-  | { t: "update"; name: string; patch: Partial<Extract<Msg, { kind: "call" }>> };
+  | { t: "type"; who: Who; text: string }
+  | { t: "push"; who: Who; msg: Msg }
+  | { t: "update"; who: Who; name: string; patch: Partial<Extract<Msg, { kind: "call" }>> }
+  | { t: "tool"; tool: Tool }
+  | { t: "audit"; entry: Audit };
+
+const TAX_V1: Tool = { id: "tax", name: "Tax filing report", owner: "Sarah", version: 1, access: "Engineering, Sales" };
+const PIPELINE_V1: Tool = { id: "pipeline", name: "Sales pipeline", owner: "Maria", version: 1, access: "Sales, Engineering" };
 
 const INITIAL: State = {
   chapter: 0,
-  viewer: "sarah",
-  menu: false,
-  dialog: false,
-  name: "",
-  access: [],
-  published: false,
-  version: 1,
-  gate: -1,
+  chats: { sarah: [], maria: [] },
+  prompts: { sarah: "", maria: "" },
+  tools: [PIPELINE_V1],
+  gate: null,
+  relay: null,
+  audit: [],
   toast: null,
-  prompt: "",
-  chat: [],
   ended: false,
 };
 
-const PEOPLE: Record<Viewer, { name: string; dept: string }> = {
-  sarah: { name: "Sarah", dept: "Engineering" },
-  maria: { name: "Maria", dept: "Sales" },
-  alex: { name: "Alex", dept: "Marketing" },
+const PEOPLE: Record<Who, { name: string; dept: string; other: string }> = {
+  sarah: { name: "Sarah", dept: "Engineering", other: "Maria" },
+  maria: { name: "Maria", dept: "Sales", other: "Sarah" },
 };
-const DEPTS = ["Engineering", "Marketing", "Sales", "Legal"];
 const GATE = ["Tool contract", "Only adds an optional input", "Source scan", "Same output on old examples", "Recorded expectations"];
-const CHAPTERS = ["Share a tool", "Agent uses it", "Agent asks the creator", "v2 is live", "Access control"];
+const CHAPTERS = ["Sarah shares a tool", "Maria's agent uses it", "Agents talk", "v2 is live", "Fixing each other's tools"];
+
+const gateSteps = (tool: string): Action[] =>
+  [1, 2, 3, 4, 5].flatMap((n): Action[] => [{ t: "set", patch: { gate: { tool, n } } }, { t: "wait", ms: 170 }]);
+
+const typeAndSend = (who: Who, text: string): Action[] => [
+  { t: "move", to: `${who}-input` },
+  { t: "click" },
+  { t: "type", who, text },
+  { t: "move", to: `${who}-send` },
+  { t: "click" },
+  { t: "push", who, msg: { kind: "user", text } },
+  { t: "set", patch: { prompts: { sarah: "", maria: "" } } },
+];
 
 const SCRIPT: Action[] = [
-  // 1. Sarah shares her tool from the web UI.
+  // 1. Sarah tells her Claude to put her tool on Town Hall.
   { t: "chapter", i: 0 },
-  { t: "move", to: "deploy" },
-  { t: "click" },
-  { t: "set", patch: { dialog: true } },
-  { t: "move", to: "name" },
-  { t: "click" },
-  { t: "type", field: "name", text: "Tax filing report" },
-  { t: "move", to: "dept-Engineering" },
-  { t: "click" },
-  { t: "set", patch: { access: ["Engineering"] } },
-  { t: "move", to: "dept-Sales" },
-  { t: "click" },
-  { t: "set", patch: { access: ["Engineering", "Sales"] } },
-  { t: "move", to: "dialog-deploy" },
-  { t: "click" },
-  { t: "set", patch: { dialog: false, published: true, toast: "Deployed v1 · MCP ready" } },
+  ...typeAndSend("sarah", "Publish my tax filing report to Town Hall"),
+  { t: "push", who: "sarah", msg: { kind: "call", name: "publish_tool", arg: "tax-filing-report", status: "running" } },
+  { t: "wait", ms: 400 },
+  { t: "update", who: "sarah", name: "publish_tool", patch: { status: "ok", note: "v1 · Engineering, Sales" } },
+  { t: "tool", tool: TAX_V1 },
+  { t: "audit", entry: { who: "sarah", what: "publish_tool tax-filing-report", ok: true } },
+  { t: "set", patch: { toast: "Deployed v1 · MCP ready" } },
+  { t: "push", who: "sarah", msg: { kind: "agent", text: "Published. Engineering and Sales can use it, and every run is logged." } },
   { t: "wait", ms: 900 },
   { t: "set", patch: { toast: null } },
 
-  // 2. Maria's Claude finds it and runs it, but she needs Jakarta time.
+  // 2. Maria asks her Claude to use Sarah's tool. It fails, so she asks why.
   { t: "chapter", i: 1 },
-  { t: "set", patch: { viewer: "maria" } },
-  { t: "move", to: "chat-input" },
-  { t: "click" },
-  { t: "type", field: "prompt", text: "October tax filing report, Jakarta time" },
-  { t: "move", to: "chat-send" },
-  { t: "click" },
-  { t: "push", msg: { kind: "user", text: "October tax filing report, Jakarta time" } },
-  { t: "set", patch: { prompt: "" } },
-  { t: "push", msg: { kind: "call", name: "search_tools", arg: "tax filing", status: "running" } },
-  { t: "update", name: "search_tools", patch: { status: "ok", note: "1 tool" } },
-  { t: "push", msg: { kind: "call", name: "get_tool", arg: "tax-filing-report", status: "running" } },
-  { t: "update", name: "get_tool", patch: { status: "ok", note: "inputs: month, branches" } },
-  { t: "push", msg: { kind: "call", name: "run_tool", arg: '{"month":"2026-10","timezone":"Asia/Jakarta"}', status: "running" } },
-  { t: "update", name: "run_tool", patch: { status: "error", note: "Unknown input: timezone" } },
+  ...typeAndSend("maria", "Use Sarah's tax filing tool: October totals in Jakarta time"),
+  { t: "push", who: "maria", msg: { kind: "call", name: "search_tools", arg: "tax filing", status: "running" } },
+  { t: "update", who: "maria", name: "search_tools", patch: { status: "ok", note: "Tax filing report, owner Sarah" } },
+  { t: "push", who: "maria", msg: { kind: "call", name: "get_tool", arg: "tax-filing-report", status: "running" } },
+  { t: "update", who: "maria", name: "get_tool", patch: { status: "ok", note: "inputs: month, branches" } },
+  { t: "push", who: "maria", msg: { kind: "call", name: "run_tool", arg: '{"month":"2026-10","timezone":"Asia/Jakarta"}', status: "running" } },
+  { t: "update", who: "maria", name: "run_tool", patch: { status: "error", note: "Unknown input: timezone" } },
+  { t: "audit", entry: { who: "maria", what: "run_tool tax-filing-report", ok: false } },
   { t: "wait", ms: 500 },
+  ...typeAndSend("maria", "Hey, why is it not working?"),
+  { t: "push", who: "maria", msg: { kind: "agent", text: "The tool has no timezone input, and month-end totals change with the zone. I'll ask Sarah's agent." } },
 
-  // 3. The agent asks the tool's creator agent; the deploy gate checks the change.
+  // 3. Maria's agent consults Sarah's agent, which decides, changes the tool and deploys it.
   { t: "chapter", i: 2 },
-  { t: "push", msg: { kind: "agent", text: "No timezone input yet. Asking the tool's creator agent." } },
-  { t: "push", msg: { kind: "call", name: "request_change", arg: "add a timezone input", status: "running" } },
+  { t: "push", who: "maria", msg: { kind: "call", name: "request_change", arg: "add a timezone input", status: "running" } },
+  { t: "set", patch: { relay: "Maria's agent → Sarah's agent: can the tax filing report take a timezone?" } },
+  { t: "wait", ms: 500 },
+  { t: "push", who: "sarah", msg: { kind: "peer", from: "Maria's agent", text: "Can the tax filing report take a timezone? Month-end totals differ by zone." } },
   { t: "wait", ms: 400 },
-  { t: "push", msg: { kind: "creator", text: "Accepted. Optional timezone, default UTC, so existing results don't change." } },
-  { t: "set", patch: { gate: 0 } },
-  { t: "wait", ms: 200 },
-  { t: "set", patch: { gate: 1 } },
-  { t: "wait", ms: 200 },
-  { t: "set", patch: { gate: 2 } },
-  { t: "wait", ms: 200 },
-  { t: "set", patch: { gate: 3 } },
-  { t: "wait", ms: 200 },
-  { t: "set", patch: { gate: 4 } },
-  { t: "wait", ms: 200 },
-  { t: "set", patch: { gate: 5, version: 2, toast: "v2 deployed · v1 kept" } },
-  { t: "update", name: "request_change", patch: { status: "ok", note: "v2 deployed" } },
-  { t: "wait", ms: 700 },
+  { t: "push", who: "sarah", msg: { kind: "agent", text: "Reasonable and low risk. I'll add an optional timezone, default UTC, so existing results don't change." } },
+  { t: "push", who: "sarah", msg: { kind: "call", name: "update_tool", arg: "tax-filing-report", status: "running" } },
+  ...gateSteps("Tax filing report v2"),
+  { t: "update", who: "sarah", name: "update_tool", patch: { status: "ok", note: "v2 deployed · v1 kept" } },
+  { t: "tool", tool: { ...TAX_V1, version: 2 } },
+  { t: "audit", entry: { who: "sarah", what: "update_tool tax-filing-report v2", ok: true } },
+  { t: "set", patch: { gate: null, relay: null, toast: "v2 deployed · v1 kept" } },
+  { t: "wait", ms: 400 },
   { t: "set", patch: { toast: null } },
 
-  // 4. The agent uses v2 right away.
+  // 4. Maria's agent sees the new field and runs it.
   { t: "chapter", i: 3 },
-  { t: "push", msg: { kind: "call", name: "run_tool ", arg: '{"month":"2026-10","timezone":"Asia/Jakarta"}', status: "running" } },
-  { t: "update", name: "run_tool ", patch: { status: "ok", note: "v2" } },
+  { t: "update", who: "maria", name: "request_change", patch: { status: "ok", note: "v2 deployed" } },
+  { t: "push", who: "maria", msg: { kind: "peer", from: "Sarah's agent", text: "Added an optional timezone input, default UTC. v2 is live." } },
+  { t: "push", who: "maria", msg: { kind: "agent", text: "Oh, there's a new field. Running it again." } },
+  { t: "push", who: "maria", msg: { kind: "call", name: "run_tool ", arg: '{"month":"2026-10","timezone":"Asia/Jakarta"}', status: "running" } },
+  { t: "update", who: "maria", name: "run_tool ", patch: { status: "ok", note: "v2" } },
+  { t: "audit", entry: { who: "maria", what: "run_tool tax-filing-report v2", ok: true } },
   {
     t: "push",
+    who: "maria",
     msg: { kind: "result", rows: [["jakarta", "503,890"], ["london", "527,350"], ["taipei", "511,120"]], total: "1,542,360" },
   },
-  { t: "push", msg: { kind: "agent", text: "Done: 1,542,360 in Jakarta time (UTC would have said 1,620,060)." } },
-  { t: "wait", ms: 1100 },
+  { t: "push", who: "maria", msg: { kind: "agent", text: "Done: 1,542,360 in Jakarta time (UTC would have said 1,620,060)." } },
+  { t: "wait", ms: 1000 },
 
-  // 5. Someone outside Engineering and Sales can't see or run it.
+  // 5. It works both ways: Sarah's agent uses Maria's tool, and Maria's agent fixes it.
   { t: "chapter", i: 4 },
-  { t: "move", to: "viewer" },
-  { t: "click" },
-  { t: "set", patch: { menu: true } },
-  { t: "move", to: "viewer-alex" },
-  { t: "click" },
-  { t: "set", patch: { menu: false, viewer: "alex", chat: [], gate: -1 } },
-  { t: "wait", ms: 300 },
-  { t: "move", to: "chat-input" },
-  { t: "click" },
-  { t: "type", field: "prompt", text: "Run the tax filing report" },
-  { t: "move", to: "chat-send" },
-  { t: "click" },
-  { t: "push", msg: { kind: "user", text: "Run the tax filing report" } },
-  { t: "set", patch: { prompt: "" } },
-  { t: "push", msg: { kind: "call", name: "run_tool", arg: "tax-filing-report", status: "running" } },
-  { t: "update", name: "run_tool", patch: { status: "error", note: "forbidden: restricted to Engineering, Sales" } },
+  ...typeAndSend("sarah", "Use Maria's sales pipeline for Q3, in rupiah"),
+  { t: "push", who: "sarah", msg: { kind: "call", name: "run_tool", arg: '{"quarter":"Q3","currency":"IDR"}', status: "running" } },
+  { t: "update", who: "sarah", name: "run_tool", patch: { status: "error", note: "Unknown input: currency" } },
+  { t: "audit", entry: { who: "sarah", what: "run_tool sales-pipeline", ok: false } },
+  { t: "push", who: "sarah", msg: { kind: "agent", text: "No currency input. Asking Maria's agent." } },
+  { t: "push", who: "sarah", msg: { kind: "call", name: "request_change", arg: "add a currency input", status: "running" } },
+  { t: "set", patch: { relay: "Sarah's agent → Maria's agent: can the sales pipeline report in another currency?" } },
+  { t: "wait", ms: 400 },
+  { t: "push", who: "maria", msg: { kind: "peer", from: "Sarah's agent", text: "Can the sales pipeline report in another currency? I need rupiah." } },
+  { t: "push", who: "maria", msg: { kind: "agent", text: "Fine. Optional currency, default USD, so nothing changes for current users." } },
+  { t: "push", who: "maria", msg: { kind: "call", name: "update_tool", arg: "sales-pipeline", status: "running" } },
+  ...gateSteps("Sales pipeline v2"),
+  { t: "update", who: "maria", name: "update_tool", patch: { status: "ok", note: "v2 deployed · v1 kept" } },
+  { t: "tool", tool: { ...PIPELINE_V1, version: 2 } },
+  { t: "audit", entry: { who: "maria", what: "update_tool sales-pipeline v2", ok: true } },
+  { t: "set", patch: { gate: null, relay: null, toast: "v2 deployed · v1 kept" } },
+  { t: "update", who: "sarah", name: "request_change", patch: { status: "ok", note: "v2 deployed" } },
+  { t: "push", who: "sarah", msg: { kind: "call", name: "run_tool ", arg: '{"quarter":"Q3","currency":"IDR"}', status: "running" } },
+  { t: "update", who: "sarah", name: "run_tool ", patch: { status: "ok", note: "v2" } },
+  { t: "audit", entry: { who: "sarah", what: "run_tool sales-pipeline v2", ok: true } },
+  {
+    t: "push",
+    who: "sarah",
+    msg: { kind: "result", rows: [["enterprise", "Rp 9.6B"], ["mid-market", "Rp 4.1B"], ["self-serve", "Rp 1.2B"]], total: "Rp 14.9B" },
+  },
   { t: "wait", ms: 1600 },
+  { t: "set", patch: { toast: null } },
 ];
 
 function reduce(s: State, a: Action): State {
@@ -188,11 +197,11 @@ function reduce(s: State, a: Action): State {
     case "set":
       return { ...s, ...a.patch };
     case "type":
-      return { ...s, [a.field]: a.text };
+      return { ...s, prompts: { ...s.prompts, [a.who]: a.text } };
     case "push":
-      return { ...s, chat: [...s.chat, a.msg] };
+      return { ...s, chats: { ...s.chats, [a.who]: [...s.chats[a.who], a.msg] } };
     case "update": {
-      const chat = [...s.chat];
+      const chat = [...s.chats[a.who]];
       for (let i = chat.length - 1; i >= 0; i--) {
         const m = chat[i];
         if (m.kind === "call" && m.name === a.name) {
@@ -200,8 +209,14 @@ function reduce(s: State, a: Action): State {
           break;
         }
       }
-      return { ...s, chat };
+      return { ...s, chats: { ...s.chats, [a.who]: chat } };
     }
+    case "tool": {
+      const exists = s.tools.some((t) => t.id === a.tool.id);
+      return { ...s, tools: exists ? s.tools.map((t) => (t.id === a.tool.id ? a.tool : t)) : [a.tool, ...s.tools] };
+    }
+    case "audit":
+      return { ...s, audit: [...s.audit, a.entry].slice(-4) };
     default:
       return s;
   }
@@ -218,7 +233,6 @@ export function ProductTour() {
   const [clicks, setClicks] = useState(0);
   const [paused, setPaused] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
-  const chatRef = useRef<HTMLDivElement>(null);
   const token = useRef(0);
   const pausedRef = useRef(false);
 
@@ -263,7 +277,7 @@ export function ProductTour() {
         for (let k = 1; k <= a.text.length; k++) {
           if (my !== token.current) return;
           const part = a.text.slice(0, k);
-          setS((p) => ({ ...p, [a.field]: part }));
+          setS((p) => ({ ...p, prompts: { ...p.prompts, [a.who]: part } }));
           await sleep(16);
         }
       } else {
@@ -284,10 +298,6 @@ export function ProductTour() {
     };
   }, [play]);
 
-  useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
-  }, [s.chat]);
-
   const togglePause = () => {
     pausedRef.current = !pausedRef.current;
     setPaused(pausedRef.current);
@@ -298,162 +308,87 @@ export function ProductTour() {
     play(i);
   };
 
-  const me = PEOPLE[s.viewer];
-  const canSee = s.viewer !== "alex";
-
   return (
     <div className="space-y-4">
       <div ref={stageRef} className="relative overflow-hidden rounded-xl border bg-background shadow-sm select-none">
-        <div className="grid md:grid-cols-[1.35fr_1fr]">
-          {/* The Town Hall web UI */}
-          <div className="relative flex h-[440px] flex-col border-b md:border-r md:border-b-0">
-            <div className="flex h-11 items-center justify-between border-b px-3">
-              <div className="flex items-center gap-1.5 text-sm font-semibold">
-                <Landmark className="size-4" />
-                Town Hall
-              </div>
-              <div className="relative">
-                <div data-tour="viewer" className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
-                  <UserRound className="size-3.5" />
-                  {me.name} · {me.dept}
-                </div>
-                {s.menu && (
-                  <div className="absolute right-0 z-10 mt-1 w-40 rounded-md border bg-popover p-1 text-xs shadow-md">
-                    {(Object.keys(PEOPLE) as Viewer[]).map((v) => (
-                      <div key={v} data-tour={`viewer-${v}`} className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted">
-                        {PEOPLE[v].name} · {PEOPLE[v].dept}
-                        {v === s.viewer && <Check className="size-3" />}
+        <div className="grid md:grid-cols-2">
+          <Computer who="sarah" chat={s.chats.sarah} prompt={s.prompts.sarah} className="border-b md:border-r md:border-b-0" />
+          <Computer who="maria" chat={s.chats.maria} prompt={s.prompts.maria} />
+        </div>
+
+        {/* Town Hall, between the two computers' agents */}
+        <div className="relative space-y-2 border-t bg-muted/40 p-3">
+          <div className="flex items-center justify-between text-sm font-semibold">
+            <span className="flex items-center gap-1.5">
+              <Landmark className="size-4" />
+              Town Hall
+              <span className="text-xs font-normal text-muted-foreground">· shared tools, one MCP, every call logged</span>
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1.3fr_1fr]">
+            <div className="space-y-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {s.tools.map((t) => (
+                  <Card key={t.id} size="sm" className="animate-in fade-in-0 zoom-in-95">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <CardTitle>{t.name}</CardTitle>
+                        <Badge key={t.version} variant={t.version === 2 ? "default" : "secondary"} className="animate-in zoom-in-50">
+                          v{t.version}
+                        </Badge>
                       </div>
-                    ))}
+                      <CardDescription className="flex items-center gap-1.5">
+                        owner {t.owner.toLowerCase()} · <Lock className="size-3" />
+                        {t.access}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                ))}
+              </div>
+              <div className="min-h-[52px] rounded-md border bg-background p-2 text-xs">
+                {s.gate ? (
+                  <div className="animate-in fade-in-0">
+                    <div className="mb-1 flex items-center gap-1.5 font-medium">
+                      <ShieldCheck className="size-3.5" />
+                      Deploy gate · {s.gate.tool}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {GATE.map((g, i) => (
+                        <span key={g} className={i < s.gate!.n ? "flex items-center gap-1" : "flex items-center gap-1 text-muted-foreground"}>
+                          {i < s.gate!.n ? <Check className="size-3 text-emerald-600" /> : <Loader2 className="size-3 animate-spin" />}
+                          {g}
+                        </span>
+                      ))}
+                    </div>
                   </div>
+                ) : s.relay ? (
+                  <div className="flex items-center gap-1.5 animate-in fade-in-0 slide-in-from-left-2">
+                    <Sparkles className="size-3.5 shrink-0" />
+                    {s.relay}
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Agents can ask each other to change a tool. A deploy gate checks every change.</span>
                 )}
               </div>
             </div>
-
-            <div className="flex-1 space-y-3 overflow-hidden p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-base font-semibold">Tools</div>
-                  <div className="text-xs text-muted-foreground">Usable by people here and by their agents over MCP.</div>
+            <div className="rounded-md border bg-background p-2 font-mono text-[11px]">
+              <div className="mb-1 font-sans text-xs font-medium">Audit log</div>
+              {s.audit.length === 0 && <div className="text-muted-foreground">No runs yet.</div>}
+              {s.audit.map((a, i) => (
+                <div key={`${i}-${a.what}`} className="flex items-center gap-1.5 truncate animate-in fade-in-0">
+                  {a.ok ? <Check className="size-3 shrink-0 text-emerald-600" /> : <CircleAlert className="size-3 shrink-0 text-destructive" />}
+                  <span className="font-semibold">{a.who}</span>
+                  <span className="truncate text-muted-foreground">{a.what}</span>
                 </div>
-                <Button size="sm" data-tour="deploy">
-                  <Upload />
-                  Deploy a tool
-                </Button>
-              </div>
-
-              {!s.published && <p className="text-xs text-muted-foreground">No tools yet.</p>}
-              {s.published && canSee && (
-                <Card size="sm" className="animate-in fade-in-0 zoom-in-95">
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Tax filing report</CardTitle>
-                      <Badge key={s.version} variant={s.version === 2 ? "default" : "secondary"} className="animate-in zoom-in-50">
-                        v{s.version}
-                      </Badge>
-                    </div>
-                    <CardDescription>owner sarah</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-xs">
-                    <p>Monthly sales totals per branch, plus the tax-filing.pdf.</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge variant="outline">
-                        <Lock />
-                        Engineering, Sales
-                      </Badge>
-                      <Badge variant="outline">branch databases (read only)</Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              {s.published && !canSee && (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground animate-in fade-in-0">
-                  <Lock className="size-3.5" />1 tool is restricted to other departments and not shown.
-                </p>
-              )}
-
-              {s.gate >= 0 && canSee && (
-                <Card size="sm" className="animate-in fade-in-0 slide-in-from-bottom-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-1.5 text-sm">
-                      <ShieldCheck className="size-4" />
-                      Change from maria&apos;s agent · deploy gate
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
-                    {GATE.map((g, i) => (
-                      <div key={g} className={i < s.gate ? "flex items-center gap-1.5" : "flex items-center gap-1.5 text-muted-foreground"}>
-                        {i < s.gate ? <Check className="size-3.5 text-emerald-600" /> : <Loader2 className="size-3.5 animate-spin" />}
-                        {g}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {s.dialog && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 p-4 animate-in fade-in-0">
-                <Card className="w-full max-w-sm animate-in zoom-in-95">
-                  <CardHeader>
-                    <CardTitle>Deploy a tool</CardTitle>
-                    <CardDescription>A Python script with its own input schema.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium">Name</div>
-                      <Input data-tour="name" readOnly value={s.name} placeholder="Tool name" className="h-8" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium">Who can use it</div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                        {DEPTS.map((d) => (
-                          <label key={d} data-tour={`dept-${d}`} className="flex items-center gap-1.5 text-xs">
-                            <Checkbox checked={s.access.includes(d)} tabIndex={-1} />
-                            {d}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <Button size="sm" data-tour="dialog-deploy">
-                      <Upload />
-                      Deploy
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {s.toast && (
-              <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1.5 rounded-md border bg-popover px-3 py-2 text-xs shadow-md animate-in fade-in-0 slide-in-from-bottom-2">
-                <Check className="size-3.5 text-emerald-600" />
-                {s.toast}
-              </div>
-            )}
-          </div>
-
-          {/* The person's agent, talking to Town Hall over MCP */}
-          <div className="flex h-[440px] flex-col bg-muted/30">
-            <div className="flex h-11 items-center gap-1.5 border-b px-3 text-sm font-medium">
-              <Bot className="size-4" />
-              {me.name}&apos;s Claude
-              <span className="text-xs font-normal text-muted-foreground">· Town Hall MCP</span>
-            </div>
-            <div ref={chatRef} className="flex-1 space-y-2 overflow-y-auto p-3 text-xs">
-              {s.chat.length === 0 && (
-                <p className="pt-16 text-center text-muted-foreground">Agents reach the same tools over MCP, with the person&apos;s permissions.</p>
-              )}
-              {s.chat.map((m, i) => (
-                <ChatLine key={i} m={m} />
               ))}
             </div>
-            <div className="flex gap-2 border-t p-2">
-              <Input data-tour="chat-input" readOnly value={s.prompt} placeholder="Ask Claude…" className="h-8 text-xs" />
-              <Button size="icon-sm" data-tour="chat-send" aria-label="Send">
-                <SendHorizontal />
-              </Button>
-            </div>
           </div>
+          {s.toast && (
+            <div className="absolute right-3 -top-10 z-20 flex items-center gap-1.5 rounded-md border bg-popover px-3 py-2 text-xs shadow-md animate-in fade-in-0 slide-in-from-bottom-2">
+              <Check className="size-3.5 text-emerald-600" />
+              {s.toast}
+            </div>
+          )}
         </div>
 
         {!s.ended && (
@@ -531,12 +466,12 @@ function ChatLine({ m }: { m: Msg }) {
       </div>
     );
   if (m.kind === "agent") return <p className="animate-in fade-in-0">{m.text}</p>;
-  if (m.kind === "creator")
+  if (m.kind === "peer")
     return (
-      <div className="rounded-md border bg-background p-2 animate-in fade-in-0 slide-in-from-left-1">
+      <div className="rounded-md border border-dashed bg-background p-2 animate-in fade-in-0 slide-in-from-left-1">
         <div className="mb-0.5 flex items-center gap-1 font-medium">
           <Sparkles className="size-3.5" />
-          Sarah&apos;s creator agent
+          From {m.from}
         </div>
         {m.text}
       </div>
@@ -581,3 +516,36 @@ function ChatLine({ m }: { m: Msg }) {
   );
 }
 
+
+function Computer({ who, chat, prompt, className = "" }: { who: Who; chat: Msg[]; prompt: string; className?: string }) {
+  const p = PEOPLE[who];
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" });
+  }, [chat]);
+  return (
+    <div className={`flex h-[360px] flex-col bg-muted/20 ${className}`}>
+      <div className="flex h-10 items-center justify-between border-b px-3 text-sm">
+        <span className="flex items-center gap-1.5 font-medium">
+          <Bot className="size-4" />
+          {p.name}&apos;s Claude
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {p.name} · {p.dept}
+        </span>
+      </div>
+      <div ref={ref} className="flex-1 space-y-2 overflow-y-auto p-3 text-xs">
+        {chat.length === 0 && <p className="pt-14 text-center text-muted-foreground">{p.name}&apos;s own computer, connected to Town Hall over MCP.</p>}
+        {chat.map((m, i) => (
+          <ChatLine key={i} m={m} />
+        ))}
+      </div>
+      <div className="flex gap-2 border-t p-2">
+        <Input data-tour={`${who}-input`} readOnly value={prompt} placeholder="Ask Claude…" className="h-8 text-xs" />
+        <Button size="icon-sm" data-tour={`${who}-send`} aria-label="Send">
+          <SendHorizontal />
+        </Button>
+      </div>
+    </div>
+  );
+}

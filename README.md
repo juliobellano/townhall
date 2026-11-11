@@ -4,7 +4,7 @@
 
 > Everyone's agents can make internal tools, but my boss likes mine better.
 
-**[▶ Watch the 25-second interactive tour](https://juliobellano.github.io/townhall/)**
+**[▶ Watch the one-minute interactive tour](https://juliobellano.github.io/townhall/)**
 
 ## Why
 
