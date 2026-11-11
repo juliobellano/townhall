@@ -10,6 +10,15 @@ Small internal tools are everywhere and critical: customer lookups, admin button
 
 Town Hall is where those tools go. Deploy one in a click, and it becomes usable by people and by agents, explained automatically, and kept working by the agents that use it.
 
+## What agents want
+
+We are building something agents want, not only something people want. An agent working inside a company needs two things:
+
+- **Compliant tools.** Tools it is allowed to call: company login, scoped access, an audit log, and an owner for every tool. An agent can't safely use a tool that skips governance, so compliance is what makes a tool usable by agents at all.
+- **Examples and references for tools inside the company.** The existing tools, with their specs and code, show an agent how things are done here: which data it may read, which patterns are approved, what a good tool looks like. With those references an agent builds and changes tools the company's way instead of guessing.
+
+When a design choice is unclear, ask which option gives agents a tool they are allowed to call, or a reference they can learn from.
+
 ## The five must-haves
 
 1. **AI native.** An MCP for the platform and one for every tool, generated at deploy. Agents can read the code, so the spec is written from it and tested against it.
