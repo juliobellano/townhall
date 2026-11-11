@@ -7,7 +7,7 @@ there are 2 interfaces to use this platform (For humans and for agents)
 right now, we are thinking:
 
 next.js for humans
-and MCP server to interact with the platform for agents (so that claude code, codex, or other harnesses can interact with our platformk)
+and MCP server to interact with the platform for agents (so that claude code, codex, or other harnesses can interact with our platform)
 
 ## YC RFS that we are trying to solve
 
@@ -43,6 +43,8 @@ e.g. not every one know what is python or go or how to even open a shell.
 
 so, our product enables everyone's agents (executing the shared tools maybe through MCP or other necessary interfaces) to run their workflow whatever the stack is.
 
+one-liner: everyone's agents can make internal tools, but my boss likes mine better.
+
 ## our selling point
 
 Defenses against "just let each agent regenerate it":
@@ -59,7 +61,9 @@ this is why a shared, canonical tool beats every agent making its own.
 effect: 
     - every generated "workflow" is slightly different (enterprise documents should be all the same)
 
-2. internal tools or workflows are made to handle sensitive data that might not be able to go out of the company. (we cannot ask agents to take the data directly)
+2. why not delegate the workflow by calling agents to handle everything end-to-end?
+
+defense: internal tools or workflows are made to handle sensitive data that might not be able to go out of the company. (we cannot ask agents to take the data directly)
     - so, tools/workflows like this are still necessary.
 
 ## landscape
@@ -87,5 +91,10 @@ Sources:
 - [Vybe (YC)](https://www.ycombinator.com/companies/vybe)
 
 ## core features
+
+- AI-native workflow management
+- Use your own harnesses (not locked-in like retool)
+- Team members' agents can co-collaborate to improve the shared tools. (agentic collaborative improvement)
+    - e.g.: my agent can use julio's agent, but I realize that there are some changes that I need in the workflow, so my agent reaches out to the workflow creator's agent and they will reason together, and improve together, and then re-deploy the tools on the spot.
 
 
