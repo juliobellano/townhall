@@ -13,7 +13,8 @@
     "test:all": "npm run test:py && vitest run",
     "demo:seed": "tsx scripts/demo-seed.mts",
     "eval:creator": "tsx scripts/eval-creator.mts",
-    "e2e": "next build && tsx scripts/e2e-mcp.mts"
+    "e2e": "next build && tsx scripts/e2e-mcp.mts",
+    "demo:call": "tsx scripts/demo-call.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
