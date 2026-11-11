@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "python3 scripts/seed_data.py",
+    "test:py": "python3 -m unittest discover -s tools/branch-report -p 'test_*.py'"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -1,0 +1,15 @@
+{
+  "_note": "Recorded at seed time from scripts/seed_data.py for month 2026-10. Totals are exact sums of seeded amounts.",
+  "UTC": {
+    "jakarta": {"transactions": 96, "total": 528890},
+    "london": {"transactions": 96, "total": 554150},
+    "taipei": {"transactions": 96, "total": 537020},
+    "grand_total": 1620060
+  },
+  "Asia/Jakarta": {
+    "jakarta": {"transactions": 93, "total": 503890},
+    "london": {"transactions": 93, "total": 527350},
+    "taipei": {"transactions": 93, "total": 511120},
+    "grand_total": 1542360
+  }
+}
