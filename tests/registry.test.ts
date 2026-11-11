@@ -9,7 +9,7 @@ beforeAll(() => {
 afterAll(() => cleanup());
 
 const publishArgs = {
-  name: "Branch finance report",
+  name: "Tax filing report",
   description: "Monthly totals per branch from the company branch databases.",
   touches: ["branch databases (read only)"],
   source: readTool("v1.py"),
@@ -21,7 +21,7 @@ describe("publishTool", () => {
     const res = await publishTool(publishArgs, sarah);
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.tool.id).toBe("branch-finance-report");
+      expect(res.tool.id).toBe("tax-filing-report");
       expect(res.tool.owner).toBe("sarah");
       expect(res.tool.latestVersion).toBe(1);
       expect(res.tool.inputSchema).toMatchObject({ required: ["month"] });
@@ -50,8 +50,8 @@ describe("publishTool", () => {
 
 describe("searchTools", () => {
   it("lists all with an empty query and matches words in name or description", () => {
-    expect(searchTools().map((t) => t.id)).toEqual(["branch-finance-report"]);
-    expect(searchTools("finance").length).toBe(1);
+    expect(searchTools().map((t) => t.id)).toEqual(["tax-filing-report"]);
+    expect(searchTools("tax").length).toBe(1);
     expect(searchTools("monthly branch").length).toBe(1);
     expect(searchTools("zzz-nothing")).toEqual([]);
   });
@@ -59,7 +59,7 @@ describe("searchTools", () => {
 
 describe("runTool", () => {
   it("runs v1 and returns the expected October totals", async () => {
-    const res = await runTool({ id: "branch-finance-report", inputs: { month: "2026-10" } }, maria);
+    const res = await runTool({ id: "tax-filing-report", inputs: { month: "2026-10" } }, maria);
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect((res.output as { grand_total: number }).grand_total).toBe(expected.UTC.grand_total);
@@ -67,22 +67,22 @@ describe("runTool", () => {
     }
   });
   it("rejects an undeclared input key against v1 instead of silently ignoring it", async () => {
-    const res = await runTool({ id: "branch-finance-report", version: 1, inputs: { month: "2026-10", timezone: "Asia/Jakarta" } }, maria);
+    const res = await runTool({ id: "tax-filing-report", version: 1, inputs: { month: "2026-10", timezone: "Asia/Jakarta" } }, maria);
     expect(res).toMatchObject({ ok: false, code: "invalid_inputs" });
     if (!res.ok) expect(res.error).toMatch(/Unknown input: timezone/);
   });
   it("returns a structured error for invalid inputs, an unknown tool, and an unknown version", async () => {
-    expect(await runTool({ id: "branch-finance-report", inputs: {} }, maria)).toMatchObject({ ok: false, code: "invalid_inputs" });
+    expect(await runTool({ id: "tax-filing-report", inputs: {} }, maria)).toMatchObject({ ok: false, code: "invalid_inputs" });
     expect(await runTool({ id: "nope", inputs: {} }, maria)).toMatchObject({ ok: false, code: "not_found" });
-    expect(await runTool({ id: "branch-finance-report", version: 9, inputs: { month: "2026-10" } }, maria)).toMatchObject({ ok: false, code: "not_found" });
+    expect(await runTool({ id: "tax-filing-report", version: 9, inputs: { month: "2026-10" } }, maria)).toMatchObject({ ok: false, code: "not_found" });
   });
   it("turns a tool failure into a structured error", async () => {
-    const res = await runTool({ id: "branch-finance-report", inputs: { month: "2026-10", branches: ["paris"] } }, maria);
+    const res = await runTool({ id: "tax-filing-report", inputs: { month: "2026-10", branches: ["paris"] } }, maria);
     expect(res).toMatchObject({ ok: false, code: "tool_failed" });
     if (!res.ok) expect(res.error).toMatch(/unknown branch/);
   });
   it("writes an audit row with person and agent for every run, including failures", async () => {
-    const runs = listRuns(50, "branch-finance-report");
+    const runs = listRuns(50, "tax-filing-report");
     expect(runs.length).toBeGreaterThanOrEqual(4);
     const ok = runs.find((r) => r.ok);
     expect(ok).toMatchObject({ person: "maria", agent: "claude-desktop", version: 1 });

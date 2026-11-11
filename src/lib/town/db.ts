@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS tools (
   description TEXT NOT NULL,
   owner TEXT NOT NULL,
   touches TEXT NOT NULL DEFAULT '[]',
+  access TEXT NOT NULL DEFAULT '[]',
   checks TEXT NOT NULL DEFAULT '{}',
   latest_version INTEGER NOT NULL,
   created_at TEXT NOT NULL
@@ -79,6 +80,9 @@ export function getDb(): DatabaseSync {
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA_SQL);
+  // Databases created before access control have no access column. Existing tools stay open to everyone.
+  const toolCols = db.prepare("PRAGMA table_info(tools)").all() as { name: string }[];
+  if (!toolCols.some((c) => c.name === "access")) db.exec("ALTER TABLE tools ADD COLUMN access TEXT NOT NULL DEFAULT '[]'");
   g.__townDb = db;
   g.__townDbFile = file;
   g.__townDbIno = inodeOf(file) ?? undefined;

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { accessDenied, canAccess, DENIED_PREFIX, normalizeAccess } from "./access";
 import { getDb, now } from "./db";
 import { toolsDir } from "./paths";
 import { readSchema, runScript } from "./runner";
@@ -33,6 +34,7 @@ type ToolRow = {
   description: string;
   owner: string;
   touches: string;
+  access: string;
   checks: string;
   latest_version: number;
   created_at: string;
@@ -44,6 +46,7 @@ const toSummary = (r: ToolRow): ToolSummary => ({
   description: r.description,
   owner: r.owner,
   touches: JSON.parse(r.touches) as string[],
+  access: JSON.parse(r.access) as string[],
   latestVersion: r.latest_version,
   createdAt: r.created_at,
 });
@@ -53,6 +56,8 @@ export type PublishArgs = {
   description: string;
   owner?: string;
   touches?: string[];
+  /** Departments allowed to use the tool. Omit or leave empty for everyone. */
+  access?: string[];
   source: string;
   checks?: Check;
 };
@@ -64,6 +69,8 @@ export async function publishTool(args: PublishArgs, identity: Identity): Promis
     return fail("invalid_request", "description is required (at least 10 characters): say what the tool does.");
   if (!args.source || !args.source.trim()) return fail("invalid_request", "source is required");
   if (Buffer.byteLength(args.source) > MAX_SOURCE_BYTES) return fail("invalid_request", "source is larger than 64 KB");
+  const access = normalizeAccess(args.access);
+  if (!access.ok) return fail("invalid_request", access.error);
   const id = slugify(name);
   if (!id) return fail("invalid_request", "name must contain letters or numbers");
   const db = getDb();
@@ -87,12 +94,13 @@ export async function publishTool(args: PublishArgs, identity: Identity): Promis
     }
   }
   const ts = now();
-  db.prepare("INSERT INTO tools (id, name, description, owner, touches, checks, latest_version, created_at) VALUES (?,?,?,?,?,?,?,?)").run(
+  db.prepare("INSERT INTO tools (id, name, description, owner, touches, access, checks, latest_version, created_at) VALUES (?,?,?,?,?,?,?,?,?)").run(
     id,
     name,
     args.description.trim(),
     args.owner?.trim() || identity.user,
     JSON.stringify(args.touches ?? []),
+    JSON.stringify(access.access),
     JSON.stringify(args.checks ?? {}),
     1,
     ts,
@@ -138,7 +146,23 @@ export function getVersion(toolId: string, version: number): { source: string; s
   return row ? { source: row.source, schema: JSON.parse(row.schema_json) as JsonSchema } : null;
 }
 
-/** Plain text match over name and description. An empty query lists every tool. */
+/**
+ * A tool as seen by one person: not_found, forbidden, or the tool. Use this at every boundary a
+ * person or agent reaches (MCP, pages); getTool itself is unfiltered, for internal use.
+ */
+export function getToolFor(id: string, identity: Identity): { ok: true; tool: ToolDetail } | Failure {
+  const tool = getTool(id);
+  if (!tool) return fail("not_found", `No tool with id "${id}". Use search_tools to find one.`);
+  if (!canAccess(identity, tool)) return accessDenied(identity, tool);
+  return { ok: true, tool };
+}
+
+/** searchTools limited to the tools this person may use. */
+export function searchToolsFor(identity: Identity, query?: string): ToolSummary[] {
+  return searchTools(query).filter((t) => canAccess(identity, t));
+}
+
+/** Plain text match over name and description, across every tool (unfiltered). An empty query lists every tool. */
 export function searchTools(query?: string): ToolSummary[] {
   const rows = getDb().prepare("SELECT * FROM tools ORDER BY created_at DESC").all() as ToolRow[];
   const q = query?.trim().toLowerCase();
@@ -176,6 +200,11 @@ export async function runTool(
 ): Promise<RunToolResult> {
   const tool = getTool(args.id);
   if (!tool) return { ...fail("not_found", `No tool with id "${args.id}". Use search_tools to find one.`) };
+  if (!canAccess(identity, tool)) {
+    const denied = accessDenied(identity, tool);
+    audit(identity, tool.id, args.version ?? tool.latestVersion, args.inputs, false, null, denied.error, 0);
+    return { ...denied, toolId: tool.id };
+  }
   const version = args.version ?? tool.latestVersion;
   const v = getVersion(tool.id, version);
   if (!v) return { ...fail("not_found", `Tool "${tool.id}" has no version ${version}. Versions: ${tool.versions.map((x) => x.version).join(", ")}.`), toolId: tool.id };
@@ -221,6 +250,7 @@ export function listRuns(limit = 50, toolId?: string): RunRecord[] {
     agent: r.agent,
     inputs: JSON.parse(r.inputs),
     ok: r.ok === 1,
+    denied: r.ok !== 1 && (r.error ?? "").startsWith(DENIED_PREFIX),
     output: r.output ? JSON.parse(r.output) : null,
     error: r.error,
     durationMs: r.duration_ms,

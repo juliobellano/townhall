@@ -1,29 +1,38 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Lock, Search } from "lucide-react";
+import { AccessBadge } from "@/components/access-badge";
 import { DeployDialog } from "@/components/deploy-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { searchTools } from "@/lib/town/registry";
+import { DEPARTMENT_LABELS, findPerson } from "@/lib/town/access";
+import { searchTools, searchToolsFor } from "@/lib/town/registry";
+import { uiIdentity } from "@/lib/ui-identity";
 
 export const dynamic = "force-dynamic";
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
-  const tools = searchTools(q);
+  const me = await uiIdentity();
+  const person = findPerson(me.user);
+  const tools = searchToolsFor(me, q);
+  const hidden = searchTools(q).length - tools.length;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Tools</h1>
-          <p className="text-sm text-muted-foreground">Shared company tools, usable by people here and by their agents over MCP.</p>
+          <p className="text-sm text-muted-foreground">
+            Shared company tools, usable by people here and by their agents over MCP. You see the tools{" "}
+            {person ? `${DEPARTMENT_LABELS[person.department]}` : "your department"} may use.
+          </p>
         </div>
         <DeployDialog />
       </div>
 
       <form className="flex max-w-md gap-2" action="/">
-        <Input name="q" defaultValue={q} placeholder="Search tools, for example: branch finance" aria-label="Search tools" />
+        <Input name="q" defaultValue={q} placeholder="Search tools, for example: tax filing" aria-label="Search tools" />
         <Button type="submit" variant="outline">
           <Search />
           Search
@@ -47,6 +56,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 <CardContent className="space-y-3 text-sm">
                   <p>{t.description}</p>
                   <div className="flex flex-wrap gap-1.5">
+                    <AccessBadge access={t.access} />
                     {t.touches.map((x) => (
                       <Badge key={x} variant="outline">
                         {x}
@@ -58,6 +68,12 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             </Link>
           ))}
         </div>
+      )}
+      {hidden > 0 && (
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Lock className="size-3.5" />
+          {hidden} {hidden === 1 ? "tool is" : "tools are"} restricted to other departments and not shown.
+        </p>
       )}
     </div>
   );

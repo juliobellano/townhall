@@ -3,8 +3,8 @@ import { apiBackend, backendOrder, gmiBackend, parseTagged, reviewWithCreator, t
 import { readTool } from "./helpers";
 
 const req: CreatorRequest = {
-  toolId: "branch-finance-report",
-  toolName: "Branch finance report",
+  toolId: "tax-filing-report",
+  toolName: "Tax filing report",
   toolDescription: "Monthly totals per branch.",
   currentSource: readTool("v1.py"),
   currentSchema: { type: "object", properties: { month: { type: "string" } }, required: ["month"] },
