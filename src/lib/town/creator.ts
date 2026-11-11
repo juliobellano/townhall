@@ -111,7 +111,7 @@ export const cliBackend: Backend = async (req, signal) => {
       "--system-prompt", SYSTEM_PROMPT,
     ];
     const out = await new Promise<string>((resolve, reject) => {
-      const child = spawn(process.env.TOWNHALL_CLAUDE_BIN ?? "claude", args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(/*turbopackIgnore: true*/ process.env.TOWNHALL_CLAUDE_BIN ?? "claude", args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (d) => (stdout += d.toString()));
