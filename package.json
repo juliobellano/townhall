@@ -10,7 +10,9 @@
     "seed": "python3 scripts/seed_data.py",
     "test:py": "python3 -m unittest discover -s tools/branch-report -p 'test_*.py'",
     "test": "vitest run",
-    "test:all": "npm run test:py && vitest run"
+    "test:all": "npm run test:py && vitest run",
+    "demo:seed": "tsx scripts/demo-seed.mts",
+    "eval:creator": "tsx scripts/eval-creator.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
@@ -36,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   }

@@ -117,7 +117,15 @@ export const cliBackend: Backend = async (req, signal) => {
       child.stdout.on("data", (d) => (stdout += d.toString()));
       child.stderr.on("data", (d) => (stderr += d.toString()));
       child.on("error", reject);
-      child.on("close", (code) => (code === 0 ? resolve(stdout) : reject(new Error(`claude exited ${code}: ${(stdout || stderr).slice(0, 300)}`))));
+      child.on("close", (code) => {
+        if (code === 0) return resolve(stdout);
+        let detail = (stderr || stdout).slice(0, 200);
+        try {
+          const j = JSON.parse(stdout) as { result?: string };
+          if (j.result) detail = j.result;
+        } catch {}
+        reject(new Error(`claude exited ${code}: ${detail}`));
+      });
       signal.addEventListener("abort", () => child.kill("SIGKILL"));
       child.stdin.end(buildUserPrompt(req));
     });
