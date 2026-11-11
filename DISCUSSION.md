@@ -102,3 +102,23 @@ Sources:
 
 - gathering data from 30 different places and all 30 of them are behind 5 different reverse proxies and locked behind vpn servers and are not documented anywhere
 - peculiar throw-away or scripts testing things that are not clearly documented.
+
+## demo goal (work backwards from this when building)
+
+1. **one-liner:** AI-native Google Drive for enterprise workflows.
+
+2. **problem we are trying to solve:** making software and custom workflows is way too easy now, so people are spamming generated tools that are not compliant with company rules, are messy, and are hard to share. Town Hall manages that. The demo also shows that not every agent can directly access enterprise databases.
+
+3. **demo features**
+   1. agent workflow
+      1. we talk to Claude Code about our workflow, it builds the tool and deploys it to Town Hall.
+      2. or the user asks which tool to use, the agent searches Town Hall, picks the correct one, asks the user for the right inputs, then returns the result directly.
+   2. human workflow
+      1. a UI to deploy a tool.
+      2. or a UI to access, search and use a tool, with the result shown directly in the UI.
+
+4. **agent collaboration**
+   1. A user wants to use a tool but needs a new field. Example: a doc generation tool, and the user wants to customize the timezone.
+   2. The user's agent contacts the workflow creator's agent directly about the new field.
+   3. The creator's agent reasons about it. If the change is good, it opens a PR and deploys.
+   4. The user's agent can then use the new field directly once it is deployed.
