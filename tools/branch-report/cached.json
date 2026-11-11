@@ -1,0 +1,7 @@
+{
+  "_note": "The stored creator-agent decision used when no live creator is available, or when a live call fails or times out. Always labeled 'cached' on screen. Applies to a tool whose source is exactly v1.py.",
+  "appliesToSourceFile": "v1.py",
+  "decision": "accept",
+  "reason": "Adding an optional timezone input (default UTC) is low risk: it only changes how the month cutoff is computed, adds no data access, and leaves the output identical when the input is not given.",
+  "newSourceFile": "v2.py"
+}
