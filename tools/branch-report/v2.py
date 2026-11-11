@@ -19,6 +19,9 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+# Reporting threshold printed on the filing, in USD.
+FILING_THRESHOLD_USD = 50000
+
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -50,6 +53,7 @@ def tax_filing_pdf(report):
         ("F1", 11, 56, 744, f"Period: {report['month']}"),
         ("F1", 11, 56, 728, f"Month cutoff timezone: {report['timezone']}"),
         ("F1", 11, 56, 712, "Source: branch databases (read only)"),
+        ("F1", 11, 56, 696, f"Filing threshold: {report['filing_threshold_usd']:,} USD"),
         ("F4", 10, 56, 676, f"{'Branch':<16}{'Transactions':>14}{'Total':>16}"),
     ]
     y = 658
@@ -131,7 +135,7 @@ def main():
                 total += amount
         con.close()
         result.append({"branch": name, "transactions": count, "total": total})
-    report = {"month": month, "timezone": tz_name, "branches": result, "grand_total": sum(r["total"] for r in result)}
+    report = {"month": month, "timezone": tz_name, "branches": result, "grand_total": sum(r["total"] for r in result), "filing_threshold_usd": FILING_THRESHOLD_USD}
     pdf = tax_filing_pdf(report)
     report["_files"] = [{"name": "tax-filing.pdf", "mime_type": "application/pdf", "base64": base64.b64encode(pdf).decode("ascii")}]
     print(json.dumps(report, sort_keys=True))

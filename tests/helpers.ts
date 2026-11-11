@@ -38,5 +38,8 @@ export const maria = { user: "maria", agent: "claude-desktop" };
 
 export const BRANCH_REPORT_CHECKS = {
   fixtures: [{ inputs: { month: "2026-10" } }, { inputs: { month: "2026-10", branches: ["taipei"] } }],
-  expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: 1542360, timezone: "Asia/Jakarta" } }],
+  expectations: [
+    { inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: 1542360, timezone: "Asia/Jakarta" } },
+    { inputs: { month: "2026-10", threshold_usd: 100000 }, expect: { grand_total: 1620060, filing_threshold_usd: 100000 } },
+  ],
 };
