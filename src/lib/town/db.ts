@@ -57,25 +57,41 @@ CREATE TABLE IF NOT EXISTS changes (
 `;
 
 // One connection per process, kept on globalThis so dev hot reloads do not open several.
-const g = globalThis as unknown as { __townDb?: DatabaseSync; __townDbFile?: string };
+const g = globalThis as unknown as { __townDb?: DatabaseSync; __townDbFile?: string; __townDbIno?: number };
+
+const inodeOf = (file: string): number | null => {
+  try {
+    return fs.statSync(file).ino;
+  } catch {
+    return null;
+  }
+};
 
 export function getDb(): DatabaseSync {
   const file = path.join(homeDir(), "townhall.db");
-  if (g.__townDb && g.__townDbFile === file) return g.__townDb;
-  g.__townDb?.close();
+  // Reuse the open connection only while it is still the file on disk. If the database was
+  // deleted or replaced (for example by wiping data/), reopen instead of reading a ghost.
+  if (g.__townDb && g.__townDbFile === file && g.__townDbIno === inodeOf(file)) return g.__townDb;
+  try {
+    g.__townDb?.close();
+  } catch {}
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA_SQL);
   g.__townDb = db;
   g.__townDbFile = file;
+  g.__townDbIno = inodeOf(file) ?? undefined;
   return db;
 }
 
 export function resetDb(): void {
-  g.__townDb?.close();
+  try {
+    g.__townDb?.close();
+  } catch {}
   g.__townDb = undefined;
   g.__townDbFile = undefined;
+  g.__townDbIno = undefined;
 }
 
 export const now = () => new Date().toISOString();

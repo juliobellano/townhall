@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { getDb } from "../src/lib/town/db";
 import { dataDir, homeDir } from "../src/lib/town/paths";
 import { getTool, publishTool } from "../src/lib/town/registry";
 
@@ -13,9 +14,11 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (f: string) => fs.readFileSync(path.join(root, "tools", "branch-report", f), "utf8");
 
 if (process.argv.includes("--fresh")) {
-  for (const f of ["townhall.db", "townhall.db-wal", "townhall.db-shm"]) fs.rmSync(path.join(homeDir(), f), { force: true });
+  // Clear the tables rather than deleting the file, so a running server keeps working between takes.
+  const db = getDb();
+  for (const t of ["changes", "runs", "versions", "tools"]) db.exec(`DELETE FROM ${t}`);
   fs.rmSync(path.join(homeDir(), "tools"), { recursive: true, force: true });
-  console.log("wiped registry, runs, changes and stored tool versions");
+  console.log("cleared tools, versions, runs and changes (the server can keep running)");
 }
 if (!fs.existsSync(path.join(dataDir(), "jakarta.db"))) {
   execFileSync("python3", [path.join(root, "scripts", "seed_data.py"), dataDir()], { stdio: "inherit" });
