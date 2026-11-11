@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { requestChange } from "../town/changes";
 import { DEPARTMENTS } from "../town/access";
-import { getToolFor, publishTool, runTool, searchToolsFor } from "../town/registry";
+import { getToolFor, getVersion, publishTool, runTool, searchToolsFor } from "../town/registry";
 import type { Identity } from "../town/types";
 
 export type { Identity };
@@ -49,12 +49,14 @@ export function createTownMcpServer(identity: Identity, opts: { origin?: string 
     "get_tool",
     {
       description:
-        "Get one tool's details: what it does, its owner, what it touches, which departments may use it (access, empty means everyone), and its input schema (inputSchema) for the latest version. Always read the schema before run_tool, and ask the user for any required input you do not have.",
+        "Get one tool's details: what it does, its owner, what it touches, which departments may use it (access, empty means everyone), its source code (source), and its input schema (inputSchema) for the latest version. Always read the schema before run_tool, and ask the user for any required input you do not have.",
       inputSchema: { id: z.string().describe("Tool id from search_tools") },
     },
     async ({ id }) => {
       const res = getToolFor(id, identity);
-      return res.ok ? json({ tool: res.tool }) : json(res, true);
+      if (!res.ok) return json(res, true);
+      // Agents can read the code: the latest version's source, so they can see why a result looks the way it does.
+      return json({ tool: { ...res.tool, source: getVersion(res.tool.id, res.tool.latestVersion)?.source ?? null } });
     },
   );
 

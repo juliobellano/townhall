@@ -38,7 +38,10 @@ const SEED: { id: string; folder: string; args: Omit<PublishArgs, "source"> }[] 
       access: ["engineering", "sales"],
       checks: {
         fixtures: [{ inputs: { month: "2026-10" } }, { inputs: { month: "2026-10", branches: ["taipei"] } }],
-        expectations: [{ inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: 1542360, timezone: "Asia/Jakarta" } }],
+        expectations: [
+          { inputs: { month: "2026-10", timezone: "Asia/Jakarta" }, expect: { grand_total: 1542360, timezone: "Asia/Jakarta" } },
+          { inputs: { month: "2026-10", threshold_usd: 100000 }, expect: { grand_total: 1620060, filing_threshold_usd: 100000 } },
+        ],
       },
     },
   },

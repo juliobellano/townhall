@@ -217,9 +217,12 @@ export const cachedBackend: Backend = async (req) => {
   const dir = path.join(repoToolsDir(), "branch-report");
   const file = path.join(dir, "cached.json");
   if (!fs.existsSync(file)) throw new Error("no cached decision available");
-  const c = JSON.parse(fs.readFileSync(file, "utf8")) as { appliesToSourceFile: string; decision: "accept" | "reject"; reason: string; newSourceFile?: string };
-  const canonicalSource = fs.readFileSync(path.join(dir, c.appliesToSourceFile), "utf8");
+  type Decision = { decision: "accept" | "reject"; reason: string; newSourceFile?: string };
+  const all = JSON.parse(fs.readFileSync(file, "utf8")) as Decision & { appliesToSourceFile: string; alternatives?: (Decision & { whenNeedMentions: string })[] };
+  const canonicalSource = fs.readFileSync(path.join(dir, all.appliesToSourceFile), "utf8");
   if (canonicalSource.trim() !== req.currentSource.trim()) throw new Error("no cached decision for this tool's source");
+  // A stored decision per kind of request (for example "threshold"); the timezone change is the default.
+  const c: Decision = all.alternatives?.find((a) => req.need.toLowerCase().includes(a.whenNeedMentions)) ?? all;
   return parseDecision({
     decision: c.decision,
     reason: c.reason,
