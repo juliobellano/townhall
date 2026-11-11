@@ -207,7 +207,8 @@ function reduce(s: State, a: Action): State {
 
 const MOVE_MS = 420;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+// A short timeout, not requestAnimationFrame, so the tour keeps going when the tab is in the background.
+const nextFrame = () => sleep(30);
 
 export function ProductTour() {
   const [s, setS] = useState<State>(INITIAL);
